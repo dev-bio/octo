@@ -1,0 +1,11 @@
+{
+  "number": 1347,
+  "user": {
+    "type": "User",
+    "login": "octocat",
+    "id": 1
+  },
+  "title": "Found a bug",
+  "body": "I'm having a problem with this.",
+  "state": "open"
+}
