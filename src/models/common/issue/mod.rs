@@ -60,6 +60,13 @@ pub enum Issue {
 }
 
 impl Issue {
+    pub fn get_author(&self) -> User {
+        match self {
+            Issue::Plain(content) => content.get_author(),
+            Issue::PullRequest(content) => content.get_author(),
+        }
+    }
+    
     pub fn is_pull_request(&self) -> bool {
         match self {
             Issue::Plain(_) => false,

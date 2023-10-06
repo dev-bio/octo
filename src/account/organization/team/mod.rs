@@ -26,7 +26,11 @@ use crate::{
         team::{Team},
     },
     
-    GitHubResult, GitHubProperties, GitHubEndpoint, Number, GitHubObject, 
+    GitHubProperties, 
+    GitHubEndpoint, 
+    GitHubObject, 
+    GitHubResult, 
+    Number, 
 };
 
 use super::{HandleOrganization};
