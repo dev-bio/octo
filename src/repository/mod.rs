@@ -205,6 +205,27 @@ impl HandleRepository {
         Ok(())
     }
 
+    pub fn try_get_active_workflows(&self) -> GitHubResult<usize, HandleRepositoryError> {
+        #[derive(Debug)]
+        #[derive(Deserialize)]
+        struct Capsule {
+            total_count: usize,
+        }
+
+        let Capsule { total_count } = {
+
+            let ref query = [
+                ("status", "in_progress")
+            ];
+
+            self.get_client()
+                .get(format!("repos/{self}/actions/runs"))?
+                .query(query).send()?.json()?
+        };
+
+        Ok(total_count)
+    }
+
     pub fn try_get_issue(&self, id: usize) -> GitHubResult<HandleIssue, HandleRepositoryError> {
         Ok(HandleIssue::try_fetch(self.clone(), id.clone())?)
     }
