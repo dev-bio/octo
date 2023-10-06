@@ -146,6 +146,46 @@ impl HandleIssue {
         Ok(issues)
     }
 
+    pub fn try_set_assignees<T: FmtDisplay>(&self, assignees: impl AsRef<[T]>) -> GitHubResult<(), IssueError> {
+        let repository = self.get_parent();
+
+        let assignees: Vec<String> = assignees.as_ref()
+            .iter().map(|assignee| assignee.to_string())
+            .collect();
+
+        let ref payload = serde_json::json!({
+            "assignees": assignees.as_slice(),
+        });
+
+        self.get_client()
+            .post(format!("repos/{repository}/issues/{self}/assignees"))?
+            .json(payload).send()?;
+
+        Ok(())
+    }
+
+    pub fn try_get_assignees(&self) -> GitHubResult<Vec<User>, IssueError> {
+        let repository = self.get_parent();
+
+        let ref payload = serde_json::json!({
+            "assignees": [],
+        });
+
+        let response = self.get_client()
+            .post(format!("repos/{repository}/issues/{self}/assignees"))?
+            .json(payload).send()?;
+
+        #[derive(Debug)]
+        #[derive(Deserialize)]
+        struct Capsule {
+            assignees: Vec<User>,
+        }
+
+        let Capsule { assignees } = response.json()?;
+
+        Ok(assignees)
+    }
+
     pub fn try_get_comment(&self, number: Number) -> GitHubResult<HandleIssueComment, IssueError> {
         Ok(HandleIssueComment::try_fetch(self.clone(), number)?)
     }
