@@ -1,7 +1,7 @@
 use std::{
 
     sync::{Arc},
-    
+
     fmt::{
         
         Display as FmtDisplay,
@@ -86,7 +86,7 @@ use crate::{
     models::common::user::{User},
 
     GitHubResult, 
-    GitHubError, 
+    GitHubError, repository::HandleRepository, 
 };
 
 pub type Token = Secret<String>;
@@ -220,6 +220,11 @@ impl Client {
                 }
             })))
         }
+    }
+
+    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<Arc<HandleRepository>, GitHubError> {
+        Ok(self.try_get_account(name.as_ref())?
+            .try_get_repository(name.as_ref())?)
     }
 
     fn build_endpoint(endpoint: impl AsRef<str>) -> GitHubResult<Url, ClientError> {
