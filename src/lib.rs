@@ -1,7 +1,12 @@
 #![allow(unused_braces)]
 #![allow(dead_code)]
 
-use std::fmt::{Debug as FmtDebug};
+use std::{
+
+    sync::{Arc},
+
+    fmt::{Debug as FmtDebug}, 
+};
 
 pub mod repository;
 pub mod account;
@@ -39,22 +44,16 @@ pub enum GitHubError {
 
 pub type GitHubResult<T, E = GitHubError> = Result<T, E>;
 
-pub trait GitHubObject {
-    fn get_number(&self) -> Number;
-}
-
-pub trait GitHubEndpoint {
-    fn get_client(&self) -> Client;
-    fn get_endpoint(&self) -> String;
-}
-
-pub trait GitHubProperties: GitHubEndpoint
+pub trait GitHubProperties
 where Self: Sized + Clone {
 
     type Content: DeserializeOwned + FmtDebug;
     type Parent;
 
+    fn get_client(&self) -> Client;
     fn get_parent(&self) -> Self::Parent;
+    fn get_endpoint(&self) -> String;
+    fn get_reference(&self) -> Arc<Self>;
 
     fn try_get_content(&self) -> GitHubResult<Self::Content, HandleRepositoryError> {
         Ok(self.get_client().get(self.get_endpoint())?
@@ -63,15 +62,27 @@ where Self: Sized + Clone {
 
     fn try_get_properties<T>(&self) -> GitHubResult<T, HandleRepositoryError>
     where T: DeserializeOwned + FmtDebug {
-        Ok(self.get_client().get(self.get_endpoint())?
-            .send()?.json()?)
+        let result = {
+            
+            self.get_client()
+                .get(self.get_endpoint())?
+                .send()?
+                .json()?
+        };
+    
+        Ok(result)
     }
 
-    fn try_set_properties<T>(&self, ref payload: T) -> GitHubResult<Self, HandleRepositoryError>
+    fn try_set_properties<T>(&self, ref payload: T) -> GitHubResult<Arc<Self>, HandleRepositoryError>
     where T: Serialize + FmtDebug {
-        self.get_client().patch(self.get_endpoint())?
-            .json(payload).send()?;
+        let _ = {
 
-        Ok(self.clone())
+            self.get_client()
+                .patch(self.get_endpoint())?
+                .json(payload)
+                .send()?
+        };
+
+        Ok(self.get_reference())
     }
 }

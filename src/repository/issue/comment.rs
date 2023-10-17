@@ -1,8 +1,13 @@
-use std::fmt::{
+use std::{
+
+    sync::{Arc, Weak}, 
     
-    Formatter as FmtFormatter,
-    Display as FmtDisplay,
-    Result as FmtResult,
+    fmt::{
+        
+        Formatter as FmtFormatter,
+        Display as FmtDisplay,
+        Result as FmtResult,
+    }, 
 };
 
 use crate::{
@@ -19,9 +24,7 @@ use crate::{
     models::common::issue::comment::{Comment},
     
     GitHubProperties,
-    GitHubEndpoint,
     GitHubResult, 
-    GitHubObject,
     Number,
 };
 
@@ -39,18 +42,28 @@ pub enum IssueCommentError {
 
 #[derive(Clone, Debug)]
 pub struct HandleIssueComment {
-    issue: HandleIssue,
+    reference: Weak<HandleIssueComment>,
+    issue: Arc<HandleIssue>,
     number: Number,
 }
 
 impl HandleIssueComment {
-    pub(crate) fn try_fetch(issue: HandleIssue, number: Number) -> GitHubResult<HandleIssueComment, IssueCommentError> {
-        let repository = issue.get_parent();
-        let client = issue.get_client();
+    pub(crate) fn try_fetch(issue: impl Into<Arc<HandleIssue>>, number: Number) -> GitHubResult<Arc<HandleIssueComment>, IssueCommentError> {
+        let issue = issue.into();
 
+        
         let Comment { number, .. } = {
-            let request = client.get(format!("repos/{repository}/issues/comments/{number}"))?;
-            match request.send() {
+
+            let repository = issue.get_parent();
+            
+            let result = {
+
+                repository.get_client()
+                    .get(format!("repos/{repository}/issues/comments/{number}"))?
+                    .send()
+            };
+
+            match result {
                 Err(ClientError::Response(ClientResponseError::Nothing { .. })) => {
                     return Err(IssueCommentError::Nothing { number })
                 },
@@ -59,16 +72,15 @@ impl HandleIssueComment {
             }
         };
 
-        Ok(HandleIssueComment {
-
-            issue,
-            number,
-        })
+        Ok(Arc::new_cyclic(|reference| HandleIssueComment {
+            reference: reference.clone(), issue, number
+        }))
     }
 
-    pub(crate) fn try_fetch_all(issue: HandleIssue) -> GitHubResult<Vec<HandleIssueComment>, IssueCommentError> {
+    pub(crate) fn try_fetch_all(issue: impl Into<Arc<HandleIssue>>) -> GitHubResult<Vec<Arc<HandleIssueComment>>, IssueCommentError> {
+        let issue = issue.into();
+
         let repository = issue.get_parent();
-        let client = issue.get_client();
 
         let mut collection = Vec::new();
         let mut page = 0;
@@ -83,10 +95,15 @@ impl HandleIssueComment {
                     ("page", page),
                 ];
 
-                let request = client.get(format!("repos/{repository}/issues{issue}/comments"))?
-                    .query(query);
+                let result = {
+                    
+                    repository.get_client()
+                        .get(format!("repos/{repository}/issues{issue}/comments"))?
+                        .query(query)
+                        .send()
+                };
 
-                match request.send() {
+                match result {
                     Err(ClientError::Response(ClientResponseError::Nothing { .. })) => break,
                     Err(error) => return Err(error.into()),
                     Ok(response) => response.json()?,
@@ -103,57 +120,65 @@ impl HandleIssueComment {
         }
 
         let mut issues = Vec::new();
-        for Comment { number, .. } in collection.iter() {
-            issues.push(HandleIssueComment { 
-                issue: issue.clone(),
-                number: number.clone(), 
-            });
+        for Comment { number, .. } in collection {
+            issues.push(Arc::new_cyclic(|reference| HandleIssueComment {
+                reference: reference.clone(), issue: issue.clone(), number
+            }));
         }
 
         Ok(issues)
     }
 
-    pub fn try_create(issue: HandleIssue, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment, IssueCommentError> {
+    pub fn try_create(issue: impl Into<Arc<HandleIssue>>, content: impl AsRef<str>) -> GitHubResult<Arc<HandleIssueComment>, IssueCommentError> {
+        let issue = issue.into();
+
         let repository = issue.get_parent();
-        let client = issue.get_client();
 
         let ref payload = serde_json::json!({
             "body": content.as_ref()
                 .to_string()
         });
 
-        let Comment { number, .. } = client.post(format!("repos/{repository}/issues/{issue}/comments"))?
-            .json(payload).send()?.json()?;
+        let Comment { number, .. } = {
 
-        Ok(HandleIssueComment {
-            issue, number
-        })
+            repository.get_client()
+                .post(format!("repos/{repository}/issues/{issue}/comments"))?
+                .json(payload)
+                .send()?
+                .json()?
+        };
+
+        Ok(Arc::new_cyclic(|reference| HandleIssueComment {
+            reference: reference.clone(), issue, number
+        }))
     }
 
-    pub fn try_delete(issue: HandleIssue, number: usize) -> GitHubResult<(), IssueCommentError> {
-        let repository = issue.get_parent();
-        let client = repository.get_client();
+    pub fn try_delete(issue: impl AsRef<HandleIssue>, number: usize) -> GitHubResult<(), IssueCommentError> {
+        let repository = issue.as_ref()
+            .get_parent();
+        
+        let _ = {
 
-        client.delete(format!("repos/{repository}/issues/comments/{number}"))?
-            .send()?;
+            repository.get_client()
+                .delete(format!("repos/{repository}/issues/comments/{number}"))?
+                .send()?
+        };
 
         Ok(())
     }
-
-    pub fn get_issue(&self) -> HandleIssue {
-        self.issue.clone()
-    }
 }
 
-impl GitHubObject for HandleIssueComment {
-    fn get_number(&self) -> Number {
-        self.number.clone()
-    }
-}
-
-impl GitHubEndpoint for HandleIssueComment {
+impl GitHubProperties for HandleIssueComment {
+    type Content = Comment;
+    type Parent = Arc<HandleIssue>;
+    
     fn get_client(&self) -> Client {
-        self.issue.get_client()
+        self.get_parent()
+            .get_client()
+    }
+    
+    fn get_parent(&self) -> Self::Parent {
+        self.issue.clone()
     }
 
     fn get_endpoint(&self) -> String {
@@ -161,14 +186,10 @@ impl GitHubEndpoint for HandleIssueComment {
             self.issue.get_parent()
         })
     }
-}
 
-impl GitHubProperties for HandleIssueComment {
-    type Content = Comment;
-    type Parent = HandleIssue;
-
-    fn get_parent(&self) -> Self::Parent {
-        self.issue.clone()
+    fn get_reference(&self) -> Arc<Self> {
+        self.reference.upgrade()
+            .unwrap()
     }
 }
 

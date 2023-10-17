@@ -1,8 +1,15 @@
-use std::fmt::{
+use std::{
+
+    borrow::{Cow},
+    ops::{Deref}, 
+
+    fmt::{
+        
+        Formatter as FmtFormatter,
+        Display as FmtDisplay,
+        Result as FmtResult,
+    }, 
     
-    Formatter as FmtFormatter,
-    Display as FmtDisplay,
-    Result as FmtResult,
 };
 
 use serde::{
@@ -14,28 +21,44 @@ use serde::{
 #[derive(Default, Hash, Clone, Debug)]
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 #[derive(Serialize, Deserialize)]
-pub struct Sha(String);
+pub struct Sha<'h>(Cow<'h, str>);
 
-impl AsRef<str> for Sha {
-    fn as_ref(&self) -> &str {
-        let Sha(value) = self;
+impl<'h> Sha<'h> {
+    pub fn to_owned(&self) -> Sha<'static> {
+        Sha(Cow::Owned(self.as_ref()
+            .to_owned()))
+    }
+}
+
+impl<'h> AsRef<str> for Sha<'h> {
+    fn as_ref(&self) -> &'_ str {
+        let Sha(value) = { self };
         value.as_ref()
     }
 }
 
-impl From<String> for Sha {
+impl<'h> Deref for Sha<'h> {
+    type Target = Cow<'h, str>;
+
+    fn deref(&self) -> &Self::Target {
+        let Sha(value) = { self };
+        value
+    }
+}
+
+impl<'h> From<String> for Sha<'h> {
     fn from(value: String) -> Self {
-        Sha(value)
+        Sha(Cow::Owned(value))
     }
 }
 
-impl From<&str> for Sha {
-    fn from(value: &str) -> Self {
-        Sha(value.to_string())
+impl<'h> From<&'h str> for Sha<'h> {
+    fn from(value: &'h str) -> Self {
+        Sha(Cow::Borrowed(value))
     }
 }
 
-impl FmtDisplay for Sha {
+impl<'h> FmtDisplay for Sha<'h> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{hash}", hash = self.as_ref())
     }

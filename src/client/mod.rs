@@ -1,7 +1,12 @@
-use std::fmt::{
+use std::{
+
+    sync::{Arc},
     
-    Display as FmtDisplay,
-    Debug as FmtDebug,
+    fmt::{
+        
+        Display as FmtDisplay,
+        Debug as FmtDebug,
+    }, 
 };
 
 use backoff::{
@@ -59,8 +64,6 @@ use serde::{
 };
 
 use crate::{
-
-    repository::{HandleRepository},
     
     account::{
 
@@ -193,7 +196,7 @@ impl Client {
             .map(|(owner, _)| owner).unwrap_or(name))?)
     }
 
-    pub fn try_get_organization(&self, name: impl AsRef<str>) -> GitHubResult<HandleOrganization, GitHubError> {
+    pub fn try_get_organization(&self, name: impl AsRef<str>) -> GitHubResult<Arc<HandleOrganization>, GitHubError> {
         let name = name.as_ref();
 
         let owner = self.try_get_account(name)?;
@@ -206,7 +209,7 @@ impl Client {
         }
     }
 
-    pub fn try_get_user(&self, name: impl AsRef<str>) -> GitHubResult<HandleUser, GitHubError> {
+    pub fn try_get_user(&self, name: impl AsRef<str>) -> GitHubResult<Arc<HandleUser>, GitHubError> {
         let name = name.as_ref();
 
         let owner = self.try_get_account(name)?;
@@ -217,10 +220,6 @@ impl Client {
                 }
             })))
         }
-    }
-
-    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<HandleRepository, GitHubError> {
-        Ok(self.try_get_account(name.as_ref())?.try_get_repository(name.as_ref())?)
     }
 
     fn build_endpoint(endpoint: impl AsRef<str>) -> GitHubResult<Url, ClientError> {

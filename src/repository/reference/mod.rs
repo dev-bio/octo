@@ -7,7 +7,7 @@ use std::{
         Formatter as FmtFormatter,
         Display as FmtDisplay,
         Result as FmtResult,
-    }, 
+    }, sync::Arc, 
 };
 
 use thiserror::{Error};
@@ -31,7 +31,7 @@ use crate::{
         Client,
     },
     
-    Number,
+    Number, GitHubProperties,
 };
 
 use crate::{GitHubResult};
@@ -52,13 +52,14 @@ pub enum ReferenceError {
 
 #[derive(Clone, Debug)]
 pub enum HandleReference {
-    PullRequest { repository: HandleRepository, branch: String, issue: Number },
-    Branch { repository: HandleRepository, branch: String },
-    Tag { repository: HandleRepository, tag: String },
+    PullRequest { repository: Arc<HandleRepository>, branch: String, issue: Number },
+    Branch { repository: Arc<HandleRepository>, branch: String },
+    Tag { repository: Arc<HandleRepository>, tag: String },
 }
 
 impl HandleReference {
-    pub(crate) fn try_parse(repository: HandleRepository, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
+    pub(crate) fn try_parse(repository: impl Into<Arc<HandleRepository>>, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
+        let repository = repository.into();
         let reference = reference.as_ref();
 
         let tokens: Vec<_> = reference.split('/')
@@ -101,8 +102,8 @@ impl HandleReference {
         Ok(kind)
     }
 
-    pub(crate) fn try_fetch(repository: HandleRepository, reference: impl AsRef<str>)  -> GitHubResult<HandleReference, ReferenceError> {
-        let client = repository.get_client();
+    pub(crate) fn try_fetch(repository: impl Into<Arc<HandleRepository>>, reference: impl AsRef<str>)  -> GitHubResult<HandleReference, ReferenceError> {
+        let repository = repository.into();
 
         let reference = reference.as_ref();
         let parsed = Self::try_parse(repository.clone(), {
@@ -117,7 +118,15 @@ impl HandleReference {
         }
 
         let Capsule { name } = { 
-            match client.get(format!("repos/{repository}/git/ref/{parsed}"))?.send() {
+
+            let result = {
+
+                repository.get_client()
+                    .get(format!("repos/{repository}/git/ref/{parsed}"))?
+                    .send()
+            };
+
+            match result {
                 Err(ClientError::Response(ClientResponseError::Nothing { .. })) => return Err(ReferenceError::Nothing {
                     reference: reference.to_string()
                 }), 
@@ -135,8 +144,8 @@ impl HandleReference {
         }
     }
 
-    pub(crate) fn try_create(repository: HandleRepository, commit: HandleCommit, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
-        let client = repository.get_client();
+    pub(crate) fn try_create(repository: impl Into<Arc<HandleRepository>>, commit: HandleCommit, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
+        let repository = repository.into();
 
         let reference = reference.as_ref();
         let parsed = Self::try_parse(repository.clone(), {
@@ -157,7 +166,15 @@ impl HandleReference {
 
         let Capsule { name } = { 
 
-            match client.post(format!("repos/{repository}/git/refs"))?.json(payload).send() {
+            let result = {
+
+                repository.get_client()
+                    .post(format!("repos/{repository}/git/refs"))?
+                    .json(payload)
+                    .send()
+            };
+
+            match result {
                 Err(ClientError::Response(ClientResponseError::Nothing { .. })) => return Err(ReferenceError::Nothing {
                     reference: reference.to_string()
                 }), 
@@ -175,7 +192,7 @@ impl HandleReference {
         }
     }
 
-    pub fn try_set_commit(&self, force: bool, commit: impl Into<Sha>) -> GitHubResult<(), HandleRepositoryError> {
+    pub fn try_set_commit(&self, force: bool, commit: impl Into<Sha<'static>>) -> GitHubResult<(), HandleRepositoryError> {
         let repository = self.get_repository();
 
         let ref payload = serde_json::json!({
@@ -191,7 +208,7 @@ impl HandleReference {
         Ok(())
     }
 
-    pub fn try_get_commit(&self) -> GitHubResult<HandleCommit, HandleRepositoryError> {
+    pub fn try_get_commit<'n>(&self) -> GitHubResult<Arc<HandleCommit>, HandleRepositoryError> {
         let repository = self.get_repository();
         let client = self.get_client();
 
@@ -200,9 +217,9 @@ impl HandleReference {
         #[serde(tag = "type")]
         enum CapsuleReference {
             #[serde(rename = "commit")]
-            Commit { sha: Sha },
+            Commit { sha: Sha<'static> },
             #[serde(rename = "tag")]
-            Tag { sha: Sha },
+            Tag { sha: Sha<'static> },
         }
 
         #[derive(Debug)]
@@ -263,7 +280,7 @@ impl HandleReference {
         }
     }
 
-    pub fn get_repository(&self) -> HandleRepository {
+    pub fn get_repository(&self) -> Arc<HandleRepository> {
         match self {
             HandleReference::PullRequest { repository, .. } => repository.clone(),
             HandleReference::Branch { repository, .. } => repository.clone(),

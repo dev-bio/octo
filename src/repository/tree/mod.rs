@@ -1,6 +1,14 @@
 use std::{
 
-    path::{PathBuf, Path},
+    borrow::{Cow},
+
+    path::{
+        
+        PathBuf, 
+        Path,
+    },
+
+    sync::{Arc}, 
 
     fmt::{
     
@@ -9,11 +17,7 @@ use std::{
         Result as FmtResult,
     }, 
     
-    ops::{
-        
-        DerefMut,
-        Deref,
-    },
+    ops::{Deref},
 };
 
 use serde::{
@@ -37,12 +41,9 @@ use crate::{
         HandleRepository,
     },
 
-    client::{
-        
-        ClientError,
-        Client,
-    },
+    client::{ClientError},
 
+    GitHubProperties,
     GitHubResult,
 };
 
@@ -100,7 +101,7 @@ pub enum TreeEntry {
         #[serde(deserialize_with = "deserialize_mode")]
         #[serde(serialize_with = "serialize_mode")]
         mode: u32,
-        sha: Sha,
+        sha: Sha<'static>,
     },
     #[serde(rename = "tree")]
     Tree {
@@ -108,7 +109,7 @@ pub enum TreeEntry {
         #[serde(deserialize_with = "deserialize_mode")]
         #[serde(serialize_with = "serialize_mode")]
         mode: u32,
-        sha: Sha,
+        sha: Sha<'static>,
     },
     #[serde(rename = "commit")]
     Commit {
@@ -116,7 +117,7 @@ pub enum TreeEntry {
         #[serde(deserialize_with = "deserialize_mode")]
         #[serde(serialize_with = "serialize_mode")]
         mode: u32,
-        sha: Sha,
+        sha: Sha<'static>,
     },
 }
 
@@ -125,7 +126,8 @@ impl TreeEntry {
         TreeEntry::Blob { 
             path: Default::default(), 
             mode: Default::default(), 
-            sha: blob.get_sha(),
+            sha: blob.get_sha()
+                .to_owned(),
         }
     }
 
@@ -133,15 +135,16 @@ impl TreeEntry {
         TreeEntry::Tree { 
             path: Default::default(), 
             mode: Default::default(), 
-            sha: tree.get_sha(),
+            sha: tree.get_sha()
+                .to_owned(),
         }
     }
 
-    pub fn commit(sha: Sha) -> TreeEntry {
+    pub fn commit<'a>(sha: Sha<'a>) -> TreeEntry {
         TreeEntry::Commit { 
             path: Default::default(), 
             mode: Default::default(), 
-            sha,
+            sha: sha.to_owned(),
         }
     }
 
@@ -210,98 +213,93 @@ pub enum TreeError {
 
 #[derive(Clone, Debug)]
 pub struct Tree {
-    pub(crate) repository: HandleRepository,
-    pub(crate) tree: Vec<TreeEntry>,
-    pub(crate) sha: Sha,
+    pub(crate) tree: Cow<'static, [TreeEntry]>,
+    pub(crate) sha: Sha<'static>,
 }
 
 impl Tree {
-    pub(crate) fn try_create(repository: HandleRepository, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, TreeError> {
-        let client = repository.get_client();
+    pub(crate) fn try_create(repository: impl Into<Arc<HandleRepository>>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, TreeError> {
+        let repository = repository.into();
 
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
             tree: Vec<TreeEntry>,
-            sha: Sha,
+            sha: Sha<'static>,
         }
 
         let ref payload = serde_json::json!({
             "tree": entries.as_ref(),
         });
 
-        let Capsule { tree, sha } = client.post(format!("repos/{repository}/git/trees"))?
+        let Capsule { tree, sha } = repository.get_client()
+            .post(format!("repos/{repository}/git/trees"))?
             .json(payload).send()?.json()?;
 
         Ok(Tree { 
-
-            repository,
-            tree,
+            tree: Cow::Owned(tree),
             sha,
         })
     }
 
-    pub(crate) fn try_create_with_base(repository: HandleRepository, base: HandleCommit, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
-        let client = repository.get_client();
-        let tree = base.try_get_tree(false)?;
+    pub(crate) fn try_create_with_base(repository: impl Into<Arc<HandleRepository>>, base: impl Into<Arc<HandleCommit>>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
+        let repository = repository.into();
+        let base = base.into();
 
-        let ref payload = serde_json::json!({
-            "base_tree": tree.get_sha(),
-            "tree": entries.as_ref(),
-        });
-
-        let response = client.post(format!("repos/{repository}/git/trees"))?
-            .json(payload)
-            .send()?;
+        let tree = { base.try_get_tree(false)? };
 
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
             tree: Vec<TreeEntry>,
-            sha: Sha,
+            sha: Sha<'static>,
         }
 
-        let Capsule { tree, sha } = response.json()?;
+        let Capsule { tree, sha } = {
+
+            let ref payload = serde_json::json!({
+                "base_tree": tree.get_sha(),
+                "tree": entries.as_ref(),
+            });
+            
+            repository.get_client()
+                .post(format!("repos/{repository}/git/trees"))?
+                .json(payload)
+                .send()?
+                .json()?
+        };
 
         Ok(Tree { 
-
-            repository,
-            tree,
+            tree: Cow::Owned(tree),
             sha,
         })
     }
 
-    pub(crate) fn try_fetch(repository: HandleRepository, sha: impl Into<Sha>, recursive: bool) -> GitHubResult<Tree, TreeError> {
-        let client = repository.get_client();
+    pub(crate) fn try_fetch<'a>(repository: impl Into<Arc<HandleRepository>>, sha: impl Into<Sha<'a>>, recursive: bool) -> GitHubResult<Tree, TreeError> {
+        let repository = repository.into();
         let sha = sha.into();
 
-        let ref recursive = if recursive { Vec::from([("recursive", "true")]) } else { Default::default() };
-        let response = client.get(format!("repos/{repository}/git/trees/{sha}"))?
+        let ref recursive = if recursive { Vec::from([("recursive", "true")]) } else { 
+            Default::default() 
+        };
+
+        let response = repository.get_client()
+            .get(format!("repos/{repository}/git/trees/{sha}"))?
             .query(recursive).send()?;
 
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
             tree: Vec<TreeEntry>,
-            sha: Sha,
+            sha: Sha<'static>,
         }
 
         let Capsule { tree, sha } = response.json()?;
 
         Ok(Tree { 
-
-            repository,
-            tree,
+            tree: Cow::Owned(tree),
             sha,
         })
-    }
-
-    pub(crate) fn client(&self) -> Client {
-        self.repository.get_client()
-    }
-
-    pub fn get_repository(&self) -> HandleRepository {
-        self.repository.clone()
     }
 
     pub fn get_sha(&self) -> Sha {
@@ -310,15 +308,9 @@ impl Tree {
 }
 
 impl Deref for Tree {
-    type Target = Vec<TreeEntry>;
+    type Target = [TreeEntry];
     fn deref(&self) -> &Self::Target {
-        &self.tree
-    }
-}
-
-impl DerefMut for Tree {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.tree
+        self.tree.as_ref()
     }
 }
 
@@ -328,8 +320,8 @@ impl FmtDisplay for Tree {
     }
 }
 
-impl Into<Sha> for Tree {
-    fn into(self) -> Sha {
-        self.sha.clone()
+impl Into<Sha<'static>> for Tree {
+    fn into(self) -> Sha<'static> {
+        self.sha.to_owned()
     }
 }

@@ -1,19 +1,25 @@
+use std::sync::{Arc, Weak};
+
 use anyhow::{Result};
 
 use super::{HandleOrganization};
-use crate::{GitHubEndpoint};
+use crate::{GitHubProperties};
 
 #[derive(Clone, Debug)]
 pub struct HandleActions {
-    pub(crate) organization: HandleOrganization,
+    pub(crate) reference: Weak<HandleActions>,
+    pub(crate) organization: Arc<HandleOrganization>,
 }
 
 impl HandleActions {
-    pub(crate) fn from_organization(organization: HandleOrganization) -> HandleActions {
-        HandleActions { organization }
+    pub(crate) fn from(organization: impl Into<Arc<HandleOrganization>>) -> Arc<HandleActions> {
+        Arc::new_cyclic(|reference| HandleActions { 
+            reference: reference.clone(), 
+            organization: organization.into()
+        })
     }
 
-    pub fn try_set_allow_list<P: AsRef<str>>(&self, set: impl AsRef<[P]>) -> Result<&Self> {
+    pub fn try_set_allow_list<P: AsRef<str>>(&self, set: impl AsRef<[P]>) -> Result<Arc<HandleActions>> {
         use model::{AllowedActions};
 
         let AllowedActions { verified, native, .. } = AllowedActions::from({
@@ -33,16 +39,19 @@ impl HandleActions {
             list,
         };
 
-        let HandleActions { organization } = { self };
+        let HandleActions { organization, .. } = { self };
 
         organization.get_client()
             .put(format!("orgs/{organization}/actions/permissions/selected-actions"))?
             .json(payload).send()?;
 
-        Ok(self)
+        let reference = self.reference.upgrade()
+            .unwrap();
+
+        Ok(reference)
     }
 
-    pub fn try_add_allow_list<P: AsRef<str>>(&self, add: impl AsRef<[P]>) -> Result<&Self> {
+    pub fn try_add_allow_list<P: AsRef<str>>(&self, add: impl AsRef<[P]>) -> Result<Arc<HandleActions>> {
         use model::{AllowedActions};
 
         let AllowedActions { verified, native, mut list } = AllowedActions::from({
@@ -62,13 +71,16 @@ impl HandleActions {
             list,
         };
 
-        let HandleActions { organization } = { self };
+        let HandleActions { organization, .. } = { self };
 
         organization.get_client()
             .put(format!("orgs/{organization}/actions/permissions/selected-actions"))?
             .json(payload).send()?;
 
-        Ok(self)
+        let reference = self.reference.upgrade()
+            .unwrap();
+
+        Ok(reference)
     }
 
     pub fn try_get_allow_list(&self) -> Result<Vec<String>> {
@@ -95,7 +107,7 @@ impl HandleActions {
             list,
         };
 
-        let HandleActions { organization } = { self };
+        let HandleActions { organization, .. } = { self };
 
         organization.get_client()
             .put(format!("orgs/{organization}/actions/permissions/selected-actions"))?
@@ -114,7 +126,7 @@ impl HandleActions {
         Ok(native)
     }
 
-    pub fn try_set_allow_verified(&self, verified: bool) -> Result<&Self> {
+    pub fn try_set_allow_verified(&self, verified: bool) -> Result<Arc<HandleActions>> {
         use model::{AllowedActions};
 
         let AllowedActions { native, list, .. } = AllowedActions::from({
@@ -127,13 +139,16 @@ impl HandleActions {
             list,
         };
 
-        let HandleActions { organization } = { self };
+        let HandleActions { organization, .. } = { self };
 
         organization.get_client()
             .put(format!("orgs/{organization}/actions/permissions/selected-actions"))?
             .json(payload).send()?;
 
-        Ok(self)
+        let reference = self.reference.upgrade()
+            .unwrap();
+
+        Ok(reference)
     }
 
     pub fn try_get_allow_verified(&self) -> Result<bool> {
@@ -149,6 +164,8 @@ impl HandleActions {
 
 mod model {
 
+    use std::sync::Arc;
+
     use anyhow::{Result};
     use serde::{
 
@@ -157,7 +174,7 @@ mod model {
     };
 
     use crate::account::organization::{HandleOrganization};
-    use crate::{GitHubEndpoint};
+    use crate::{GitHubProperties};
 
     #[derive(Clone, Debug)]
     #[derive(Serialize, Deserialize)]
@@ -171,7 +188,9 @@ mod model {
     }
 
     impl AllowedActions {
-        pub(super) fn from(organization: HandleOrganization) -> Result<Self> {
+        pub(super) fn from(organization: impl Into<Arc<HandleOrganization>>) -> Result<Self> {
+            let organization = organization.into();
+
             let response = {
                 
                 organization.get_client()

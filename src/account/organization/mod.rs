@@ -1,8 +1,13 @@
-use std::fmt::{
+use std::{
 
-    Formatter as FmtFormatter,
-    Display as FmtDisplay,
-    Result as FmtResult,
+    sync::{Arc, Weak},
+
+    fmt::{
+
+        Formatter as FmtFormatter,
+        Display as FmtDisplay,
+        Result as FmtResult,
+    }, 
 };
 
 use thiserror::{Error};
@@ -11,13 +16,7 @@ use serde::{Deserialize};
 
 use crate::{
     
-    repository::{
-
-        HandleRepositoryError,
-        HandleRepository,
-    },
-
-    account::{Account},
+    repository::{HandleRepositoryError},
 
     client::{
 
@@ -27,11 +26,8 @@ use crate::{
 
     models::common::user::{User},
     
-    GitHubProperties, 
-    GitHubEndpoint, 
-    GitHubObject, 
-    GitHubResult, 
-    Number, 
+    GitHubProperties,
+    GitHubResult,
 };
 
 pub mod actions;
@@ -54,9 +50,9 @@ pub enum HandleOrganizationError {
 
 #[derive(Clone, Debug)]
 pub struct HandleOrganization {
+    pub(crate) reference: Weak<HandleOrganization>,
     pub(crate) client: Client,
     pub(crate) name: String,
-    pub(crate) number: Number,
 }
 
 impl HandleOrganization {
@@ -75,49 +71,40 @@ impl HandleOrganization {
         Ok(is_verified)
     }
 
-    pub fn try_get_team(&self, slug: impl AsRef<str>) -> GitHubResult<HandleTeam, HandleOrganizationError> {
-        Ok(HandleTeam::try_fetch(self.clone(), slug.as_ref())?)
+    pub fn try_get_team(&self, slug: impl AsRef<str>) -> GitHubResult<Arc<HandleTeam>, HandleOrganizationError> {
+        Ok(HandleTeam::try_fetch(self.get_reference(), slug.as_ref())?)
     }
 
-    pub fn try_get_all_teams(&self) -> GitHubResult<Vec<HandleTeam>, HandleOrganizationError> {
-        Ok(HandleTeam::try_fetch_all(self.clone())?)
+    pub fn try_get_all_teams(&self) -> GitHubResult<Vec<Arc<HandleTeam>>, HandleOrganizationError> {
+        Ok(HandleTeam::try_fetch_all(self.get_reference())?)
     }
 
-    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<HandleRepository, HandleOrganizationError> {
-        Ok(HandleRepository::try_fetch(Account::Organization(self.clone()), name)?)
-    }
-
-    pub fn try_get_all_repositories(&self) -> GitHubResult<Vec<HandleRepository>, HandleOrganizationError> {
-        Ok(HandleRepository::try_fetch_all(Account::Organization(self.clone()))?)
-    }
-
-    pub fn actions(&self) -> HandleActions {
-        HandleActions::from_organization(self.clone())
-    }
-}
-
-impl GitHubObject for HandleOrganization {
-    fn get_number(&self) -> Number {
-        self.number.clone()
-    }
-}
-
-impl GitHubEndpoint for HandleOrganization {
-    fn get_client(&self) -> Client {
-        self.client.clone()
-    }
-
-    fn get_endpoint(&self) -> String {
-        format!("orgs/{self}")
+    pub fn get_actions(&self) -> Arc<HandleActions> {
+        HandleActions::from({
+            self.get_reference()
+        })
     }
 }
 
 impl GitHubProperties for HandleOrganization {
     type Content = User;
     type Parent = Client;
-
+    
+    fn get_client(&self) -> Client {
+        self.client.clone()
+    }
+    
     fn get_parent(&self) -> Self::Parent {
         self.client.clone()
+    }
+    
+    fn get_endpoint(&self) -> String {
+        format!("orgs/{self}")
+    }
+
+    fn get_reference(&self) -> Arc<Self> {
+        self.reference.upgrade()
+            .unwrap()
     }
 }
 

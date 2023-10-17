@@ -1,5 +1,5 @@
 use std::{
-
+    
     path::{PathBuf},
 
     fmt::{
@@ -9,11 +9,7 @@ use std::{
         Result as FmtResult,
     },
     
-    ops::{
-
-        DerefMut,
-        Deref, 
-    },
+    ops::{Deref},
 };
 
 use thiserror::{Error};
@@ -30,6 +26,7 @@ use crate::{
 
     client::{ClientError},
 
+    GitHubProperties, 
     GitHubResult, 
 };
 
@@ -95,8 +92,11 @@ pub struct Compare {
 }
 
 impl Compare {
-    pub fn try_from_base_head(repository: HandleRepository, base: HandleCommit, head: HandleCommit) -> GitHubResult<Compare, CompareError> {
-        let client = repository.get_client();
+    pub fn try_from_base_head(repository: impl AsRef<HandleRepository>, base: impl AsRef<HandleCommit>, head: impl AsRef<HandleCommit>) -> GitHubResult<Compare, CompareError> {
+        let repository = repository.as_ref();
+
+        let base = base.as_ref();
+        let head = head.as_ref();
 
         #[derive(Debug)]
         #[derive(Deserialize)]
@@ -104,20 +104,25 @@ impl Compare {
             files: Vec<CompareFile>,
         }
 
-        let Capsule { files } = client.get({
-            format!("repos/{repository}/compare/{base}...{head}")
-        })?.send()?.json()?;
+        let Capsule { files } = {
+
+            repository.get_client()
+                .get(format!("repos/{repository}/compare/{base}...{head}"))?
+                .send()?
+                .json()?
+        };
 
         Ok(Compare { 
 
             files,
-            base,
-            head,
+
+            base: base.clone(),
+            head: head.clone(),
         })
     }
 
     pub fn files(&self) -> &[CompareFile] {
-        self.files.as_slice()
+        self.files.as_ref()
     }
 
     pub fn get_base(&self) -> HandleCommit {
@@ -130,16 +135,10 @@ impl Compare {
 }
 
 impl Deref for Compare {
-    type Target = Vec<CompareFile>;
+    type Target = [CompareFile];
 
     fn deref(&self) -> &Self::Target {
-        &self.files
-    }
-}
-
-impl DerefMut for Compare {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.files
+        self.files.as_ref()
     }
 }
 

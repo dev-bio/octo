@@ -1,8 +1,13 @@
-use std::fmt::{
+use std::{
     
-    Formatter as FmtFormatter,
-    Display as FmtDisplay,
-    Result as FmtResult,
+    sync::{Arc, Weak}, 
+
+    fmt::{
+    
+        Formatter as FmtFormatter,
+        Display as FmtDisplay,
+        Result as FmtResult,
+    }, 
 };
 
 use crate::{
@@ -34,8 +39,6 @@ use crate::{
     },
 
     GitHubProperties,
-    GitHubEndpoint,
-    GitHubObject,
     GitHubResult, 
     Number,
 };
@@ -62,13 +65,14 @@ pub enum IssueError {
 
 #[derive(Clone, Debug)]
 pub struct HandleIssue {
-    repository: HandleRepository,
+    reference: Weak<HandleIssue>,
+    repository: Arc<HandleRepository>,
     number: Number,
 }
 
 impl HandleIssue {
-    pub(crate) fn try_fetch(repository: HandleRepository, number: Number) -> GitHubResult<HandleIssue, IssueError> {
-        let client = repository.get_client();
+    pub(crate) fn try_fetch(repository: impl Into<Arc<HandleRepository>>, number: Number) -> GitHubResult<Arc<HandleIssue>, IssueError> {
+        let repository = repository.into();
 
         #[derive(Debug)]
         #[derive(Deserialize)]
@@ -87,23 +91,26 @@ impl HandleIssue {
         }
 
         let issue: Issue = {
-            client.get(format!("repos/{repository}/issues/{number}"))?
-                .send()?.json()?
+
+            repository.get_client()
+                .get(format!("repos/{repository}/issues/{number}"))?
+                .send()?
+                .json()?
         };
 
         if issue.is_pull_request() {
             return Err(IssueError::Issue { number });
         }
 
-        Ok(HandleIssue {
-
-            repository,
+        Ok(Arc::new_cyclic(|reference| HandleIssue {
+            reference: reference.clone(), 
+            repository: repository.clone(),
             number,
-        })
+        }))
     }
 
-    pub(crate) fn try_fetch_all(repository: HandleRepository) -> GitHubResult<Vec<HandleIssue>, IssueError> {
-        let client = repository.get_client();
+    pub(crate) fn try_fetch_all(repository: impl Into<Arc<HandleRepository>>) -> GitHubResult<Vec<Arc<HandleIssue>>, IssueError> {
+        let repository = repository.into();
 
         let mut collection = Vec::new();
         let mut page = 0;
@@ -113,12 +120,17 @@ impl HandleIssue {
             page = { page + 1 };
 
             let capsules: Vec<Issue> = {
+
                 let ref query = [
                     ("per_page", 100),
                     ("page", page),
                 ];
-                client.get(format!("repos/{repository}/issues"))?
-                    .query(query).send()?.json()?
+
+                repository.get_client()
+                    .get(format!("repos/{repository}/issues"))?
+                    .query(query)
+                    .send()?
+                    .json()?
             };
 
             collection.extend_from_slice({
@@ -136,11 +148,11 @@ impl HandleIssue {
                 continue 
             }
 
-            issues.push(HandleIssue { 
-                
+            issues.push(Arc::new_cyclic(|reference| HandleIssue {
+                reference: reference.clone(), 
                 repository: repository.clone(),
-                number: issue.get_number(), 
-            });
+                number: issue.get_number(),
+            }));
         }
 
         Ok(issues)
@@ -186,63 +198,65 @@ impl HandleIssue {
         Ok(assignees)
     }
 
-    pub fn try_get_comment(&self, number: Number) -> GitHubResult<HandleIssueComment, IssueError> {
-        Ok(HandleIssueComment::try_fetch(self.clone(), number)?)
+    pub fn try_get_comment(&self, number: Number) -> GitHubResult<Arc<HandleIssueComment>, IssueError> {
+        Ok(HandleIssueComment::try_fetch(self.get_reference(), number)?)
     }
 
     pub fn try_has_comment(&self, number: Number) -> GitHubResult<bool, IssueError> {
-        match HandleIssueComment::try_fetch(self.clone(), number) {
+        match HandleIssueComment::try_fetch(self.get_reference(), number) {
             Err(IssueCommentError::Nothing { .. }) => Ok(false),
             Err(error) => Err(IssueError::Comment(error)),
             Ok(_) => Ok(true),
         }
     }
 
-    pub fn try_get_all_issue_comments(&self) -> GitHubResult<Vec<HandleIssueComment>, IssueError> {
-        Ok(HandleIssueComment::try_fetch_all(self.clone())?)
+    pub fn try_get_all_issue_comments(&self) -> GitHubResult<Vec<Arc<HandleIssueComment>>, IssueError> {
+        Ok(HandleIssueComment::try_fetch_all(self.get_reference())?)
     }
 
     pub fn try_has_comments(&self) -> GitHubResult<bool, IssueError> {
-        match HandleIssueComment::try_fetch_all(self.clone()) {
+        match HandleIssueComment::try_fetch_all(self.get_reference()) {
             Err(IssueCommentError::Nothing { .. }) => Ok(false),
             Err(error) => Err(IssueError::Comment(error)),
             Ok(_) => Ok(true),
         }
     }
 
-    pub fn try_create_comment(&self, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment, IssueError> {
-        Ok(HandleIssueComment::try_create(self.clone(), content.as_ref())?)
+    pub fn try_create_comment(&self, content: impl AsRef<str>) -> GitHubResult<Arc<HandleIssueComment>, IssueError> {
+        Ok(HandleIssueComment::try_create(self.get_reference(), content.as_ref())?)
     }
 
     pub fn try_delete_comment(&self, number: Number) -> GitHubResult<(), IssueError> {
-        Ok(HandleIssueComment::try_delete(self.clone(), number)?)
-    }
-}
-
-impl GitHubEndpoint for HandleIssue {
-    fn get_client(&self) -> Client {
-        self.repository.get_client()
-    }
-
-    fn get_endpoint(&self) -> String {
-        let HandleIssue { repository, .. } = { self };
-        format!("repos/{repository}/issues/{self}")
-    }
-}
-
-impl GitHubObject for HandleIssue {
-    fn get_number(&self) -> Number {
-        self.number.clone()
+        Ok(HandleIssueComment::try_delete(self, number)?)
     }
 }
 
 impl GitHubProperties for HandleIssue {
     type Content = Issue;
-    type Parent = HandleRepository;
+    type Parent = Arc<HandleRepository>;
 
+    fn get_client(&self) -> Client {
+        self.get_parent()
+            .get_client()
+    }
+    
     fn get_parent(&self) -> Self::Parent {
         self.repository.clone()
     }
+
+    fn get_endpoint(&self) -> String {
+        let Self { repository, .. } = { self };
+        format!("repos/{repository}/issues/{self}")
+    }
+
+    fn get_reference(&self) -> Arc<Self> {
+        self.reference.upgrade()
+            .unwrap()
+    }
+}
+
+impl AsRef<HandleIssue> for HandleIssue {
+    fn as_ref(&self) -> &Self { self }
 }
 
 impl FmtDisplay for HandleIssue {

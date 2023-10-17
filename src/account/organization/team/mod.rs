@@ -1,9 +1,14 @@
-use std::fmt::{
+use std::{
 
-    Formatter as FmtFormatter,
-    Display as FmtDisplay,
-    Result as FmtResult,
-    Debug as FmtDebug,
+    sync::{Arc, Weak},
+
+    fmt::{
+
+        Formatter as FmtFormatter,
+        Display as FmtDisplay,
+        Result as FmtResult,
+        Debug as FmtDebug,
+    },
 };
 
 use thiserror::{Error};
@@ -26,11 +31,8 @@ use crate::{
         team::{Team},
     },
     
-    GitHubProperties, 
-    GitHubEndpoint, 
-    GitHubObject, 
+    GitHubProperties,
     GitHubResult, 
-    Number, 
 };
 
 use super::{HandleOrganization};
@@ -47,34 +49,37 @@ pub enum HandleTeamError {
 
 #[derive(Clone, Debug)]
 pub struct HandleTeam {
-    pub(crate) organization: HandleOrganization,
-    pub(crate) number: Number,
+    pub(crate) reference: Weak<HandleTeam>,
+    pub(crate) organization: Arc<HandleOrganization>,
     pub(crate) slug: String,
 }
 
 impl HandleTeam {
-    pub(crate) fn try_fetch(organization: HandleOrganization, slug: impl AsRef<str>) -> GitHubResult<HandleTeam, HandleTeamError> {
+    pub(crate) fn try_fetch(organization: impl Into<Arc<HandleOrganization>>, slug: impl AsRef<str>) -> GitHubResult<Arc<HandleTeam>, HandleTeamError> {
+        let organization = organization.into();
         let slug = slug.as_ref()
             .to_owned();
 
-        let Team { number, slug, .. } = {
+        let Team { slug, .. } = {
             organization.get_client()
                 .get(format!("orgs/{organization}/teams/{slug}"))?
                 .send()?.json()?
         };
 
-        Ok(HandleTeam { 
+        Ok(Arc::new_cyclic(|reference| HandleTeam { 
+            reference: reference.clone(),
             organization,
-            number,
             slug,
-        })
+        }))
     }
 
-    pub(crate) fn try_fetch_all(organization: HandleOrganization) -> GitHubResult<Vec<HandleTeam>, HandleTeamError> {
+    pub(crate) fn try_fetch_all(organization: impl Into<Arc<HandleOrganization>>) -> GitHubResult<Vec<Arc<HandleTeam>>, HandleTeamError> {
+        let organization = organization.into();
         let client = organization.get_client();
-
+        
         let mut collection = Vec::new();
         let mut page = 0;
+        
 
         loop {
 
@@ -99,9 +104,11 @@ impl HandleTeam {
             }
         }
 
-        Ok(collection.into_iter().map(|Team { number, slug, .. }| HandleTeam { 
-            organization: organization.clone(), number: number.clone(), slug: slug.clone()
-        }).collect())
+        Ok(collection.into_iter().map(|Team { slug, .. }| Arc::new_cyclic(|reference| HandleTeam { 
+            reference: reference.clone(), 
+            organization: organization.clone(), 
+            slug 
+        })).collect())
     }
 
     pub fn try_has_team_member<T>(&self, ref member: T) -> GitHubResult<bool, HandleTeamError>
@@ -123,29 +130,26 @@ impl HandleTeam {
     }
 }
 
-impl GitHubObject for HandleTeam {
-    fn get_number(&self) -> Number {
-        self.number.clone()
-    }
-}
-
-impl GitHubEndpoint for HandleTeam {
+impl GitHubProperties for HandleTeam {
+    type Content = Team;
+    type Parent = Arc<HandleOrganization>;
+    
     fn get_client(&self) -> Client {
         self.organization.get_client()
     }
-
-    fn get_endpoint(&self) -> String {
-        let HandleTeam { organization, slug, .. } = { self };
-        format!("orgs/{organization}/teams/{slug}")
-    }
-}
-
-impl GitHubProperties for HandleTeam {
-    type Content = Team;
-    type Parent = HandleOrganization;
-
+    
     fn get_parent(&self) -> Self::Parent {
         self.organization.clone()
+    }
+    
+    fn get_endpoint(&self) -> String {
+        let HandleTeam { organization, .. } = { self };
+        format!("orgs/{organization}/teams/{self}")
+    }
+
+    fn get_reference(&self) -> Arc<Self> {
+        self.reference.upgrade()
+            .unwrap()
     }
 }
 

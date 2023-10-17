@@ -15,6 +15,7 @@ use crate::{
     
     client::{ClientError},
     
+    GitHubProperties, 
     GitHubResult, 
 };
 
@@ -23,6 +24,7 @@ use crate::{
     repository::{
         
         sha::{Sha},
+
         HandleRepository,
     },
 };
@@ -45,7 +47,7 @@ pub enum Blob {
         #[serde(serialize_with = "serialize")]
         content: Vec<u8>,
         #[serde(skip_serializing)]
-        sha: Sha,
+        sha: Sha<'static>,
     },
 
     #[serde(rename = "utf-8")]
@@ -53,15 +55,17 @@ pub enum Blob {
 
         content: String,
         #[serde(skip_serializing)]
-        sha: Sha,
+        sha: Sha<'static>,
     },
 }
 
 impl Blob {
-    pub fn try_fetch(repository: HandleRepository, sha: impl Into<Sha>) -> GitHubResult<Blob, BlobError> {
-        let sha = sha.into();
-
+    pub fn try_fetch<'a>(repository: impl AsRef<HandleRepository>, sha: impl Into<Sha<'a>>) -> GitHubResult<Blob, BlobError> {
+        let repository = repository.as_ref();
+        
         let blob = {
+            
+            let sha: Sha = { sha.into() };
 
             repository.get_client()
                 .get(format!("repos/{repository}/git/blobs/{sha}"))?
@@ -72,7 +76,8 @@ impl Blob {
         Ok(blob)
     }
 
-    pub fn try_create_text_blob(repository: HandleRepository, text: impl AsRef<str>) -> GitHubResult<Blob, BlobError> {
+    pub fn try_create_text_blob(repository: impl AsRef<HandleRepository>, text: impl AsRef<str>) -> GitHubResult<Blob, BlobError> {
+        let repository = repository.as_ref();
         let text = text.as_ref();
 
         let ref blob = serde_json::json!({
@@ -80,55 +85,60 @@ impl Blob {
             "content": text,
         });
         
-        let result = repository.get_client()
-            .post(format!("repos/{repository}/git/blobs"))?
-            .json(blob)
-            .send()?;
-        
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
-            sha: Sha,
+            sha: Sha<'static>,
         }
 
-        let Capsule { sha } = result.json()?;
+        let Capsule { sha } = {
+
+            repository.get_client()
+                .post(format!("repos/{repository}/git/blobs"))?
+                .json(blob)
+                .send()?
+                .json()?
+        };
 
         Ok(Blob::Text { content: text.to_owned(), sha })
     }
 
-    pub fn try_create_binary_blob(repository: HandleRepository, binary: impl AsRef<[u8]>) -> GitHubResult<Blob, BlobError> {
+    pub fn try_create_binary_blob(repository: impl AsRef<HandleRepository>, binary: impl AsRef<[u8]>) -> GitHubResult<Blob, BlobError> {
+        let repository = repository.as_ref();
         let binary = binary.as_ref();
-
-        use base64::{
-
-            engine::general_purpose::{STANDARD},
-            Engine,
-        };
-
-        let ref blob = serde_json::json!({
-            "encoding": "base64",
-            "content": STANDARD.encode({
-                binary.as_ref()
-            }),
-        });
-
-        let result = repository.get_client()
-            .post(format!("repos/{repository}/git/blobs"))?
-            .json(blob)
-            .send()?;
         
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
-            sha: Sha,
+            sha: Sha<'static>,
         }
 
-        let Capsule { sha } = result.json()?;
+        let Capsule { sha } = {
+
+            use base64::{
+
+                engine::general_purpose::{STANDARD},
+                Engine,
+            };
+    
+            let ref blob = serde_json::json!({
+                "encoding": "base64",
+                "content": STANDARD.encode({
+                    binary.as_ref()
+                }),
+            });
+
+            repository.get_client()
+                .post(format!("repos/{repository}/git/blobs"))?
+                .json(blob)
+                .send()?
+                .json()?
+        };
 
         Ok(Blob::Binary { content: binary.to_owned(), sha })
     }
 
-    pub fn get_sha(&self) -> Sha {
+    pub fn get_sha(&self) -> Sha<'_> {
         match self {
             Blob::Binary { sha, .. } => sha.clone(),
             Blob::Text { sha, .. } => sha.clone(),
@@ -169,11 +179,11 @@ where D : Deserializer<'de> {
         })
 }
 
-impl Into<Sha> for Blob {
-    fn into(self) -> Sha {
+impl<'a> Into<Sha<'a>> for Blob {
+    fn into(self) -> Sha<'a> {
         match self {
-            Blob::Binary { sha, .. } => sha.clone(),
-            Blob::Text { sha, .. } => sha.clone(),
+            Blob::Binary { sha, .. } => sha.to_owned(),
+            Blob::Text { sha, .. } => sha.to_owned(),
         }
     }
 }

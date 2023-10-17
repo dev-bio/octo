@@ -110,7 +110,7 @@ impl<'de> Deserialize<'de> for CommitVerification {
 pub struct Commit {
     pub author: CommitAuthor,
     pub verified: CommitVerification,
-    pub parents: Vec<Sha>,
+    pub parents: Vec<Sha<'static>>,
 }
 
 impl<'de> Deserialize<'de> for Commit {
@@ -118,7 +118,7 @@ impl<'de> Deserialize<'de> for Commit {
     where D: Deserializer<'de> {
         #[derive(Deserialize)]
         struct CapsuleParent {
-            sha: Sha,
+            sha: Sha<'static>,
         }
 
         #[derive(Deserialize)]

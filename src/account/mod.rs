@@ -1,9 +1,14 @@
-use std::fmt::{
+use std::{
 
-    Formatter as FmtFormatter,
-    Display as FmtDisplay,
-    Result as FmtResult,
-    Debug as FmtDebug,
+    sync::{Arc}, 
+    
+    fmt::{
+
+        Formatter as FmtFormatter,
+        Display as FmtDisplay,
+        Result as FmtResult,
+        Debug as FmtDebug,
+    }, 
 };
 
 use crate::{
@@ -72,8 +77,8 @@ pub enum AccountError {
 
 #[derive(Clone, Debug)]
 pub enum Account {
-    Organization(HandleOrganization),
-    User(HandleUser),
+    Organization(Arc<HandleOrganization>),
+    User(Arc<HandleUser>),
 }
 
 impl Account {
@@ -84,16 +89,20 @@ impl Account {
             .send()?.json()?;
 
         match account {
-            User::Organization { name, number, .. } => Ok(Account::Organization(HandleOrganization { client, name, number })),
-            User::User { name, number, .. } => Ok(Account::User(HandleUser { client, name, number })),
+            User::Organization { name, .. } => Ok(Account::Organization(Arc::new_cyclic(|reference| {
+                HandleOrganization { reference: reference.clone(), client, name }
+            }))),
+            User::User { name, .. } => Ok(Account::User(Arc::new_cyclic(|reference| {
+                HandleUser { reference: reference.clone(), client, name }
+            }))),
             _ => Err(AccountError::Unsupported { account }),
         }
     }
 
     pub(crate) fn get_client(&self) -> Client {
         match self {
-            Account::Organization(HandleOrganization { ref client, .. }) => client.clone(),
-            Account::User(HandleUser { ref client, .. }) => client.clone(),
+            Account::Organization(organization) => organization.get_client(),
+            Account::User(user) => user.get_client(),
         }
     }
 
@@ -120,30 +129,36 @@ impl Account {
         Ok(())
     }
 
-    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<HandleRepository, AccountError> {
-        match self {
-            Account::Organization(organization) => Ok(organization.try_get_repository(name)?),
-            Account::User(user) => Ok(user.try_get_repository(name)?),
-        }
+    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<Arc<HandleRepository>, AccountError> {
+        Ok(HandleRepository::try_fetch(self.clone(), name)?)
     }
 
-    pub fn try_get_all_repositories(&self) -> GitHubResult<Vec<HandleRepository>, AccountError> {
-        match self {
-            Account::Organization(organization) => Ok(organization.try_get_all_repositories()?),
-            Account::User(user) => Ok(user.try_get_all_repositories()?),
-        }
+    pub fn try_get_all_repositories(&self) -> GitHubResult<Vec<Arc<HandleRepository>>, AccountError> {
+        Ok(HandleRepository::try_fetch_all(self.clone())?)
+    }
+}
+
+impl From<Arc<HandleOrganization>> for Account {
+    fn from(organization: Arc<HandleOrganization>) -> Account {
+        Account::Organization(organization)
     }
 }
 
 impl From<HandleOrganization> for Account {
     fn from(organization: HandleOrganization) -> Account {
-        Account::Organization(organization)
+        Account::Organization(organization.into())
+    }
+}
+
+impl From<Arc<HandleUser>> for Account {
+    fn from(user: Arc<HandleUser>) -> Account {
+        Account::User(user)
     }
 }
 
 impl From<HandleUser> for Account {
     fn from(user: HandleUser) -> Account {
-        Account::User(user)
+        Account::User(user.into())
     }
 }
 
