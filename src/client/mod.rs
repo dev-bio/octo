@@ -63,6 +63,8 @@ use serde::{
 
 use crate::{
     
+    repository::{HandleRepository},
+
     account::{
 
         organization::{
@@ -134,7 +136,6 @@ pub struct Client {
 }
 
 impl Client {
-    /// Fetches optional token from action environment, expects input with name `github-token`.
     pub fn new() -> GitHubResult<Client, GitHubError> {
         Client::new_with_token(None::<String>)
     }
@@ -219,6 +220,24 @@ impl Client {
                 }
             })))
         }
+    }
+
+    pub fn try_get_repository<'a, 'b>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleRepository<'b>, GitHubError> 
+    where 'a: 'b {
+
+        let name = name.into();
+        
+        Ok(self.try_get_account(name.clone())?
+            .try_get_repository(name.clone())?)
+    }
+
+    pub fn try_get_all_repositories<'a, 'b>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<Vec<HandleRepository<'b>>, GitHubError> 
+    where 'a: 'b {
+
+        let name = name.into();
+
+        Ok(self.try_get_account(name.clone())?
+            .try_get_all_repositories()?)
     }
 
     fn build_endpoint(endpoint: impl AsRef<str>) -> GitHubResult<Url, ClientError> {
