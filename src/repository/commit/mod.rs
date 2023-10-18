@@ -296,14 +296,20 @@ impl<'a> GitHubProperties<'a> for HandleCommit<'a> {
     }
 }
 
-impl<'a> FmtDisplay for HandleCommit<'a> {
-    fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
-        write!(fmt, "{sha}", sha = self.sha)
+impl<'a> Into<Sha<'static>> for &'a HandleCommit<'a> {
+    fn into(self) -> Sha<'static> {
+        self.sha.to_owned()
     }
 }
 
 impl<'a> Into<Sha<'static>> for HandleCommit<'a> {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
+    }
+}
+
+impl<'a> FmtDisplay for HandleCommit<'a> {
+    fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
+        write!(fmt, "{sha}", sha = self.sha)
     }
 }

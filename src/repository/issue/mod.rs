@@ -226,6 +226,18 @@ impl<'a> HandleIssue<'a> {
     }
 }
 
+impl<'a> Into<Number> for &'a HandleIssue<'a> {
+    fn into(self) -> Number {
+        self.number.clone()
+    }
+}
+
+impl<'a> Into<Number> for HandleIssue<'a> {
+    fn into(self) -> Number {
+        self.number.clone()
+    }
+}
+
 impl<'a> GitHubProperties<'a> for HandleIssue<'a> {
     type Content = Issue;
     type Parent = HandleRepository<'a>;

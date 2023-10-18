@@ -179,16 +179,22 @@ impl<'a> GitHubProperties<'a> for HandleIssueComment<'a> {
     }
 }
 
-impl<'a> FmtDisplay for HandleIssueComment<'a> {
-    fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
-        write!(fmt, "{number}", number = {
-            self.number.clone()
-        })
+impl<'a> Into<Number> for &'a HandleIssueComment<'a> {
+    fn into(self) -> Number {
+        self.number.clone()
     }
 }
 
 impl<'a> Into<Number> for HandleIssueComment<'a> {
     fn into(self) -> Number {
         self.number.clone()
+    }
+}
+
+impl<'a> FmtDisplay for HandleIssueComment<'a> {
+    fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
+        write!(fmt, "{number}", number = {
+            self.number.clone()
+        })
     }
 }

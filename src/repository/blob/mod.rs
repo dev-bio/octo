@@ -175,6 +175,15 @@ where D : Deserializer<'de> {
         })
 }
 
+impl<'a> Into<Sha<'static>> for &'a Blob<'a> {
+    fn into(self) -> Sha<'static> {
+        match self {
+            Blob::Binary { sha, .. } => sha.to_owned(),
+            Blob::Text { sha, .. } => sha.to_owned(),
+        }
+    }
+}
+
 impl<'a> Into<Sha<'static>> for Blob<'a> {
     fn into(self) -> Sha<'static> {
         match self {

@@ -307,14 +307,20 @@ impl<'a> Deref for Tree<'a> {
     }
 }
 
-impl<'a> FmtDisplay for Tree<'a> {
-    fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
-        write!(fmt, "{sha}", sha = self.sha)
+impl<'a> Into<Sha<'static>> for &'a Tree<'a> {
+    fn into(self) -> Sha<'static> {
+        self.sha.to_owned()
     }
 }
 
-impl<'a> Into<Sha<'a>> for Tree<'a> {
+impl<'a> Into<Sha<'static>> for Tree<'a> {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
+    }
+}
+
+impl<'a> FmtDisplay for Tree<'a> {
+    fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
+        write!(fmt, "{sha}", sha = self.sha)
     }
 }
