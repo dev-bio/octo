@@ -1,6 +1,7 @@
 use std::{
     
     path::{PathBuf},
+    ops::{Deref}, 
 
     fmt::{
     
@@ -9,7 +10,6 @@ use std::{
         Result as FmtResult,
     },
     
-    ops::{Deref},
 };
 
 use thiserror::{Error};
@@ -84,20 +84,15 @@ pub enum CompareError {
     Client(#[from] ClientError),
 }
 
-#[derive(Debug, Clone)]
-pub struct Compare {
+#[derive(Debug)]
+pub struct Compare<'a> {
     files: Vec<CompareFile>,
-    base: HandleCommit,
-    head: HandleCommit,
+    base: &'a HandleCommit<'a>,
+    head: &'a HandleCommit<'a>,
 }
 
-impl Compare {
-    pub fn try_from_base_head(repository: impl AsRef<HandleRepository>, base: impl AsRef<HandleCommit>, head: impl AsRef<HandleCommit>) -> GitHubResult<Compare, CompareError> {
-        let repository = repository.as_ref();
-
-        let base = base.as_ref();
-        let head = head.as_ref();
-
+impl<'a> Compare<'a> {
+    pub fn try_from_base_head(repository: &'a HandleRepository<'a>, base: &'a HandleCommit<'a>, head: &'a HandleCommit<'a>) -> GitHubResult<Compare<'a>, CompareError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -125,16 +120,16 @@ impl Compare {
         self.files.as_ref()
     }
 
-    pub fn get_base(&self) -> HandleCommit {
-        self.base.clone()
+    pub fn get_base(&self) -> &'a HandleCommit<'a> {
+        self.base
     }
 
-    pub fn get_head(&self) -> HandleCommit {
+    pub fn get_head(&self) -> &'a HandleCommit<'a>{
         self.head.clone()
     }
 }
 
-impl Deref for Compare {
+impl<'a> Deref for Compare<'a> {
     type Target = [CompareFile];
 
     fn deref(&self) -> &Self::Target {
@@ -142,7 +137,7 @@ impl Deref for Compare {
     }
 }
 
-impl FmtDisplay for Compare {
+impl<'a> FmtDisplay for Compare<'a> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{base}..{head}", base = self.base, head = self.head)
     }

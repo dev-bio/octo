@@ -1,7 +1,7 @@
 use std::{
 
-    sync::{Arc, Weak}, 
-    
+    borrow::{Cow},
+
     fmt::{
         
         Formatter as FmtFormatter,
@@ -40,18 +40,14 @@ pub enum IssueCommentError {
     Nothing { number: Number },
 }
 
-#[derive(Clone, Debug)]
-pub struct HandleIssueComment {
-    reference: Weak<HandleIssueComment>,
-    issue: Arc<HandleIssue>,
+#[derive(Debug)]
+pub struct HandleIssueComment<'a> {
+    issue: &'a HandleIssue<'a>,
     number: Number,
 }
 
-impl HandleIssueComment {
-    pub(crate) fn try_fetch(issue: impl Into<Arc<HandleIssue>>, number: Number) -> GitHubResult<Arc<HandleIssueComment>, IssueCommentError> {
-        let issue = issue.into();
-
-        
+impl<'a> HandleIssueComment<'a> {
+    pub(crate) fn try_fetch(issue: &'a HandleIssue<'a>, number: Number) -> GitHubResult<HandleIssueComment<'a>, IssueCommentError> {
         let Comment { number, .. } = {
 
             let repository = issue.get_parent();
@@ -72,14 +68,12 @@ impl HandleIssueComment {
             }
         };
 
-        Ok(Arc::new_cyclic(|reference| HandleIssueComment {
-            reference: reference.clone(), issue, number
-        }))
+        Ok(HandleIssueComment {
+            issue, number
+        })
     }
 
-    pub(crate) fn try_fetch_all(issue: impl Into<Arc<HandleIssue>>) -> GitHubResult<Vec<Arc<HandleIssueComment>>, IssueCommentError> {
-        let issue = issue.into();
-
+    pub(crate) fn try_fetch_all(issue: &'a HandleIssue<'a>) -> GitHubResult<Vec<HandleIssueComment<'a>>, IssueCommentError> {
         let repository = issue.get_parent();
 
         let mut collection = Vec::new();
@@ -121,17 +115,15 @@ impl HandleIssueComment {
 
         let mut issues = Vec::new();
         for Comment { number, .. } in collection {
-            issues.push(Arc::new_cyclic(|reference| HandleIssueComment {
-                reference: reference.clone(), issue: issue.clone(), number
-            }));
+            issues.push(HandleIssueComment {
+                issue, number
+            });
         }
 
         Ok(issues)
     }
 
-    pub fn try_create(issue: impl Into<Arc<HandleIssue>>, content: impl AsRef<str>) -> GitHubResult<Arc<HandleIssueComment>, IssueCommentError> {
-        let issue = issue.into();
-
+    pub fn try_create(issue: &'a HandleIssue<'a>, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment<'a>, IssueCommentError> {
         let repository = issue.get_parent();
 
         let ref payload = serde_json::json!({
@@ -148,14 +140,13 @@ impl HandleIssueComment {
                 .json()?
         };
 
-        Ok(Arc::new_cyclic(|reference| HandleIssueComment {
-            reference: reference.clone(), issue, number
-        }))
+        Ok(HandleIssueComment {
+            issue, number
+        })
     }
 
-    pub fn try_delete(issue: impl AsRef<HandleIssue>, number: usize) -> GitHubResult<(), IssueCommentError> {
-        let repository = issue.as_ref()
-            .get_parent();
+    pub fn try_delete(issue: &'a HandleIssue<'a>, number: usize) -> GitHubResult<(), IssueCommentError> {
+        let repository = issue.get_parent();
         
         let _ = {
 
@@ -168,32 +159,27 @@ impl HandleIssueComment {
     }
 }
 
-impl GitHubProperties for HandleIssueComment {
+impl<'a> GitHubProperties<'a> for HandleIssueComment<'a> {
     type Content = Comment;
-    type Parent = Arc<HandleIssue>;
+    type Parent = HandleIssue<'a>;
     
-    fn get_client(&self) -> Client {
+    fn get_client(&'a self) -> &'a Client {
         self.get_parent()
             .get_client()
     }
     
-    fn get_parent(&self) -> Self::Parent {
-        self.issue.clone()
+    fn get_parent(&self) -> &'a Self::Parent {
+        self.issue
     }
 
-    fn get_endpoint(&self) -> String {
+    fn get_endpoint(&'a self) -> Cow<'a, str> {
         format!("repos/{repository}/issues/comments/{self}", repository = {
             self.issue.get_parent()
-        })
-    }
-
-    fn get_reference(&self) -> Arc<Self> {
-        self.reference.upgrade()
-            .unwrap()
+        }).into()
     }
 }
 
-impl FmtDisplay for HandleIssueComment {
+impl<'a> FmtDisplay for HandleIssueComment<'a> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{number}", number = {
             self.number.clone()
@@ -201,7 +187,7 @@ impl FmtDisplay for HandleIssueComment {
     }
 }
 
-impl Into<Number> for HandleIssueComment {
+impl<'a> Into<Number> for HandleIssueComment<'a> {
     fn into(self) -> Number {
         self.number.clone()
     }

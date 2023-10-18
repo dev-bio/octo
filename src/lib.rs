@@ -1,12 +1,8 @@
 #![allow(unused_braces)]
 #![allow(dead_code)]
 
-use std::{
-
-    sync::{Arc},
-
-    fmt::{Debug as FmtDebug}, 
-};
+use std::borrow::{Cow};
+use std::fmt::{Debug as FmtDebug};
 
 pub mod repository;
 pub mod account;
@@ -23,6 +19,7 @@ use client::{
 };
 
 use repository::{HandleRepositoryError};
+
 use thiserror::{Error};
 
 use serde::{
@@ -44,26 +41,25 @@ pub enum GitHubError {
 
 pub type GitHubResult<T, E = GitHubError> = Result<T, E>;
 
-pub trait GitHubProperties
-where Self: Sized + Clone {
+pub trait GitHubProperties<'a>
+where Self: Sized {
 
     type Content: DeserializeOwned + FmtDebug;
     type Parent;
 
-    fn get_client(&self) -> Client;
-    fn get_parent(&self) -> Self::Parent;
-    fn get_endpoint(&self) -> String;
-    fn get_reference(&self) -> Arc<Self>;
+    fn get_client(&'a self) -> &'a Client;
+    fn get_parent(&'a self) -> &'a Self::Parent;
+    fn get_endpoint(&'a self) -> Cow<'a, str>;
 
-    fn try_get_content(&self) -> GitHubResult<Self::Content, HandleRepositoryError> {
+    fn try_get_content(&'a self) -> GitHubResult<Self::Content, HandleRepositoryError> {
         Ok(self.get_client().get(self.get_endpoint())?
             .send()?.json()?)
     }
 
-    fn try_get_properties<T>(&self) -> GitHubResult<T, HandleRepositoryError>
+    fn try_get_properties<T>(&'a self) -> GitHubResult<T, HandleRepositoryError>
     where T: DeserializeOwned + FmtDebug {
         let result = {
-            
+
             self.get_client()
                 .get(self.get_endpoint())?
                 .send()?
@@ -73,7 +69,7 @@ where Self: Sized + Clone {
         Ok(result)
     }
 
-    fn try_set_properties<T>(&self, ref payload: T) -> GitHubResult<Arc<Self>, HandleRepositoryError>
+    fn try_set_properties<T>(&'a self, ref payload: T) -> GitHubResult<&'a Self, HandleRepositoryError>
     where T: Serialize + FmtDebug {
         let _ = {
 
@@ -83,6 +79,6 @@ where Self: Sized + Clone {
                 .send()?
         };
 
-        Ok(self.get_reference())
+        Ok(self)
     }
 }

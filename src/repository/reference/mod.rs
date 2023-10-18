@@ -7,7 +7,7 @@ use std::{
         Formatter as FmtFormatter,
         Display as FmtDisplay,
         Result as FmtResult,
-    }, sync::Arc, 
+    },
 };
 
 use thiserror::{Error};
@@ -50,16 +50,15 @@ pub enum ReferenceError {
     Delete,
 }
 
-#[derive(Clone, Debug)]
-pub enum HandleReference {
-    PullRequest { repository: Arc<HandleRepository>, branch: String, issue: Number },
-    Branch { repository: Arc<HandleRepository>, branch: String },
-    Tag { repository: Arc<HandleRepository>, tag: String },
+#[derive(Debug)]
+pub enum HandleReference<'a> {
+    PullRequest { repository: &'a HandleRepository<'a>, branch: String, issue: Number },
+    Branch { repository: &'a HandleRepository<'a>, branch: String },
+    Tag { repository: &'a HandleRepository<'a>, tag: String },
 }
 
-impl HandleReference {
-    pub(crate) fn try_parse(repository: impl Into<Arc<HandleRepository>>, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
-        let repository = repository.into();
+impl<'a> HandleReference<'a> {
+    pub(crate) fn try_parse(repository: &'a HandleRepository<'a>, reference: impl AsRef<str>) -> GitHubResult<HandleReference<'a>, ReferenceError> {
         let reference = reference.as_ref();
 
         let tokens: Vec<_> = reference.split('/')
@@ -102,11 +101,10 @@ impl HandleReference {
         Ok(kind)
     }
 
-    pub(crate) fn try_fetch(repository: impl Into<Arc<HandleRepository>>, reference: impl AsRef<str>)  -> GitHubResult<HandleReference, ReferenceError> {
-        let repository = repository.into();
-
+    pub(crate) fn try_fetch(repository: &'a HandleRepository<'a>, reference: impl AsRef<str>)  -> GitHubResult<HandleReference<'a>, ReferenceError> {
         let reference = reference.as_ref();
-        let parsed = Self::try_parse(repository.clone(), {
+
+        let parsed = Self::try_parse(repository, {
             reference
         })?;
 
@@ -144,11 +142,9 @@ impl HandleReference {
         }
     }
 
-    pub(crate) fn try_create(repository: impl Into<Arc<HandleRepository>>, commit: HandleCommit, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
-        let repository = repository.into();
-
+    pub(crate) fn try_create(repository: &'a HandleRepository<'a>, commit: HandleCommit, reference: impl AsRef<str>) -> GitHubResult<HandleReference<'a>, ReferenceError> {
         let reference = reference.as_ref();
-        let parsed = Self::try_parse(repository.clone(), {
+        let parsed = Self::try_parse(repository, {
             reference
         })?;
         
@@ -208,7 +204,7 @@ impl HandleReference {
         Ok(())
     }
 
-    pub fn try_get_commit<'n>(&self) -> GitHubResult<Arc<HandleCommit>, HandleRepositoryError> {
+    pub fn try_get_commit<'n>(&self) -> GitHubResult<HandleCommit<'a>, HandleRepositoryError> {
         let repository = self.get_repository();
         let client = self.get_client();
 
@@ -272,7 +268,7 @@ impl HandleReference {
         Ok(())
     }
 
-    pub(crate) fn get_client(&self) -> Client {
+    pub(crate) fn get_client(&'a self) -> &'a Client {
         match self {
             HandleReference::PullRequest { repository, .. } => repository.get_client(),
             HandleReference::Branch { repository, .. } => repository.get_client(),
@@ -280,11 +276,11 @@ impl HandleReference {
         }
     }
 
-    pub fn get_repository(&self) -> Arc<HandleRepository> {
+    pub fn get_repository(&self) -> &'a HandleRepository<'a> {
         match self {
-            HandleReference::PullRequest { repository, .. } => repository.clone(),
-            HandleReference::Branch { repository, .. } => repository.clone(),
-            HandleReference::Tag { repository, .. } => repository.clone(),
+            HandleReference::PullRequest { repository, .. } => repository,
+            HandleReference::Branch { repository, .. } => repository,
+            HandleReference::Tag { repository, .. } => repository,
         }
     }
 
@@ -310,7 +306,7 @@ impl HandleReference {
     }
 }
 
-impl FmtDisplay for HandleReference {
+impl<'a> FmtDisplay for HandleReference<'a> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         match self {
             HandleReference::PullRequest { branch, issue, .. } => write!(fmt, "pull/{issue}/{branch}"),

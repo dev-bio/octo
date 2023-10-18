@@ -1,14 +1,10 @@
 use std::{
 
-    borrow::{Cow},
-
     path::{
         
         PathBuf, 
         Path,
     },
-
-    sync::{Arc}, 
 
     fmt::{
     
@@ -212,15 +208,13 @@ pub enum TreeError {
 }
 
 #[derive(Clone, Debug)]
-pub struct Tree {
-    pub(crate) tree: Cow<'static, [TreeEntry]>,
-    pub(crate) sha: Sha<'static>,
+pub struct Tree<'a> {
+    pub(crate) tree: Vec<TreeEntry>,
+    pub(crate) sha: Sha<'a>,
 }
 
-impl Tree {
-    pub(crate) fn try_create(repository: impl Into<Arc<HandleRepository>>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, TreeError> {
-        let repository = repository.into();
-
+impl<'a> Tree<'a> {
+    pub(crate) fn try_create(repository: &'a HandleRepository<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, TreeError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -237,15 +231,13 @@ impl Tree {
             .json(payload).send()?.json()?;
 
         Ok(Tree { 
-            tree: Cow::Owned(tree),
+
+            tree,
             sha,
         })
     }
 
-    pub(crate) fn try_create_with_base(repository: impl Into<Arc<HandleRepository>>, base: impl Into<Arc<HandleCommit>>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
-        let repository = repository.into();
-        let base = base.into();
-
+    pub(crate) fn try_create_with_base(repository: &'a HandleRepository<'a>, base: &'a HandleCommit<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree<'a>, HandleRepositoryError> {
         let tree = { base.try_get_tree(false)? };
 
         #[derive(Debug)]
@@ -270,13 +262,13 @@ impl Tree {
         };
 
         Ok(Tree { 
-            tree: Cow::Owned(tree),
+
+            tree,
             sha,
         })
     }
 
-    pub(crate) fn try_fetch<'a>(repository: impl Into<Arc<HandleRepository>>, sha: impl Into<Sha<'a>>, recursive: bool) -> GitHubResult<Tree, TreeError> {
-        let repository = repository.into();
+    pub(crate) fn try_fetch(repository: &'a HandleRepository<'a>, sha: impl Into<Sha<'a>>, recursive: bool) -> GitHubResult<Tree, TreeError> {
         let sha = sha.into();
 
         let ref recursive = if recursive { Vec::from([("recursive", "true")]) } else { 
@@ -297,7 +289,8 @@ impl Tree {
         let Capsule { tree, sha } = response.json()?;
 
         Ok(Tree { 
-            tree: Cow::Owned(tree),
+
+            tree,
             sha,
         })
     }
@@ -307,20 +300,20 @@ impl Tree {
     }
 }
 
-impl Deref for Tree {
+impl<'a> Deref for Tree<'a> {
     type Target = [TreeEntry];
     fn deref(&self) -> &Self::Target {
         self.tree.as_ref()
     }
 }
 
-impl FmtDisplay for Tree {
+impl<'a> FmtDisplay for Tree<'a> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{sha}", sha = self.sha)
     }
 }
 
-impl Into<Sha<'static>> for Tree {
+impl<'a> Into<Sha<'a>> for Tree<'a> {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
     }

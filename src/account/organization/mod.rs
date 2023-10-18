@@ -1,6 +1,6 @@
 use std::{
 
-    sync::{Arc, Weak},
+    borrow::{Cow}, 
 
     fmt::{
 
@@ -49,13 +49,12 @@ pub enum HandleOrganizationError {
 }
 
 #[derive(Clone, Debug)]
-pub struct HandleOrganization {
-    pub(crate) reference: Weak<HandleOrganization>,
+pub struct HandleOrganization<'a> {
     pub(crate) client: Client,
-    pub(crate) name: String,
+    pub(crate) name: Cow<'a, str>,
 }
 
-impl HandleOrganization {
+impl<'a> HandleOrganization<'a> {
     pub fn try_is_verified(&self) -> GitHubResult<bool, HandleOrganizationError> {
         #[derive(Debug)]
         #[derive(Deserialize)] 
@@ -71,44 +70,37 @@ impl HandleOrganization {
         Ok(is_verified)
     }
 
-    pub fn try_get_team(&self, slug: impl AsRef<str>) -> GitHubResult<Arc<HandleTeam>, HandleOrganizationError> {
-        Ok(HandleTeam::try_fetch(self.get_reference(), slug.as_ref())?)
+    pub fn try_get_team(&'a self, slug: impl AsRef<str>) -> GitHubResult<HandleTeam<'a>, HandleOrganizationError> {
+        Ok(HandleTeam::try_fetch(self, slug.as_ref())?)
     }
 
-    pub fn try_get_all_teams(&self) -> GitHubResult<Vec<Arc<HandleTeam>>, HandleOrganizationError> {
-        Ok(HandleTeam::try_fetch_all(self.get_reference())?)
+    pub fn try_get_all_teams(&'a self) -> GitHubResult<Vec<HandleTeam<'a>>, HandleOrganizationError> {
+        Ok(HandleTeam::try_fetch_all(self)?)
     }
 
-    pub fn get_actions(&self) -> Arc<HandleActions> {
-        HandleActions::from({
-            self.get_reference()
-        })
+    pub fn get_actions(&'a self) -> HandleActions<'a> {
+        HandleActions::from(self)
     }
 }
 
-impl GitHubProperties for HandleOrganization {
+impl<'a> GitHubProperties<'a> for HandleOrganization<'a> {
     type Content = User;
     type Parent = Client;
     
-    fn get_client(&self) -> Client {
-        self.client.clone()
+    fn get_client(&'a self) -> &'a Client {
+        &(self.client)
     }
     
-    fn get_parent(&self) -> Self::Parent {
-        self.client.clone()
+    fn get_parent(&'a self) -> &'a Self::Parent {
+        &(self.client)
     }
     
-    fn get_endpoint(&self) -> String {
-        format!("orgs/{self}")
-    }
-
-    fn get_reference(&self) -> Arc<Self> {
-        self.reference.upgrade()
-            .unwrap()
+    fn get_endpoint(&self) -> Cow<'a, str> {
+        format!("orgs/{self}").into()
     }
 }
 
-impl FmtDisplay for HandleOrganization {
+impl<'a> FmtDisplay for HandleOrganization<'a> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         let HandleOrganization { name, .. } = { self };
         write!(fmt, "{name}")

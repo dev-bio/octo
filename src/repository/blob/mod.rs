@@ -38,7 +38,7 @@ pub enum BlobError {
 #[derive(Clone, Debug)]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "encoding")]
-pub enum Blob {
+pub enum Blob<'a> {
 
     #[serde(rename = "base64")]
     Binary {
@@ -47,7 +47,7 @@ pub enum Blob {
         #[serde(serialize_with = "serialize")]
         content: Vec<u8>,
         #[serde(skip_serializing)]
-        sha: Sha<'static>,
+        sha: Sha<'a>,
     },
 
     #[serde(rename = "utf-8")]
@@ -55,14 +55,12 @@ pub enum Blob {
 
         content: String,
         #[serde(skip_serializing)]
-        sha: Sha<'static>,
+        sha: Sha<'a>,
     },
 }
 
-impl Blob {
-    pub fn try_fetch<'a>(repository: impl AsRef<HandleRepository>, sha: impl Into<Sha<'a>>) -> GitHubResult<Blob, BlobError> {
-        let repository = repository.as_ref();
-        
+impl<'a> Blob<'a> {
+    pub fn try_fetch(repository: &'a HandleRepository<'a>, sha: impl Into<Sha<'a>>) -> GitHubResult<Blob<'a>, BlobError> {
         let blob = {
             
             let sha: Sha = { sha.into() };
@@ -76,8 +74,7 @@ impl Blob {
         Ok(blob)
     }
 
-    pub fn try_create_text_blob(repository: impl AsRef<HandleRepository>, text: impl AsRef<str>) -> GitHubResult<Blob, BlobError> {
-        let repository = repository.as_ref();
+    pub fn try_create_text_blob(repository: &'a HandleRepository<'a>, text: impl AsRef<str>) -> GitHubResult<Blob<'a>, BlobError> {
         let text = text.as_ref();
 
         let ref blob = serde_json::json!({
@@ -103,8 +100,7 @@ impl Blob {
         Ok(Blob::Text { content: text.to_owned(), sha })
     }
 
-    pub fn try_create_binary_blob(repository: impl AsRef<HandleRepository>, binary: impl AsRef<[u8]>) -> GitHubResult<Blob, BlobError> {
-        let repository = repository.as_ref();
+    pub fn try_create_binary_blob(repository: &'a HandleRepository<'a>, binary: impl AsRef<[u8]>) -> GitHubResult<Blob<'a>, BlobError> {
         let binary = binary.as_ref();
         
         #[derive(Debug)]
@@ -179,8 +175,8 @@ where D : Deserializer<'de> {
         })
 }
 
-impl<'a> Into<Sha<'a>> for Blob {
-    fn into(self) -> Sha<'a> {
+impl<'a> Into<Sha<'static>> for Blob<'a> {
+    fn into(self) -> Sha<'static> {
         match self {
             Blob::Binary { sha, .. } => sha.to_owned(),
             Blob::Text { sha, .. } => sha.to_owned(),

@@ -1,12 +1,10 @@
 use std::{
 
-    sync::{Arc},
-
     fmt::{
         
         Display as FmtDisplay,
         Debug as FmtDebug,
-    }, 
+    }, borrow::Cow, 
 };
 
 use backoff::{
@@ -86,7 +84,7 @@ use crate::{
     models::common::user::{User},
 
     GitHubResult, 
-    GitHubError, repository::HandleRepository, 
+    GitHubError,
 };
 
 pub type Token = Secret<String>;
@@ -189,15 +187,16 @@ impl Client {
         }
     }
 
-    pub fn try_get_account(&self, name: impl AsRef<str>) -> GitHubResult<Account, GitHubError> {
-        let name = name.as_ref();
+    pub fn try_get_account<'a>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<Account<'a>, GitHubError> {
+        let name = name.into();
 
-        Ok(Account::from_name(self.clone(), name.split_once('/')
-            .map(|(owner, _)| owner).unwrap_or(name))?)
+        Ok(Account::try_from_name(self.clone(), name.split_once('/')
+            .map(|(owner, _)| Cow::Owned(owner.to_owned()))
+            .unwrap_or(name))?)
     }
 
-    pub fn try_get_organization(&self, name: impl AsRef<str>) -> GitHubResult<Arc<HandleOrganization>, GitHubError> {
-        let name = name.as_ref();
+    pub fn try_get_organization<'a>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleOrganization<'a>, GitHubError> {
+        let name = name.into();
 
         let owner = self.try_get_account(name)?;
         if let Account::Organization(organization) = owner { Ok(organization) } else {
@@ -209,8 +208,8 @@ impl Client {
         }
     }
 
-    pub fn try_get_user(&self, name: impl AsRef<str>) -> GitHubResult<Arc<HandleUser>, GitHubError> {
-        let name = name.as_ref();
+    pub fn try_get_user<'a>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleUser<'a>, GitHubError> {
+        let name = name.into();
 
         let owner = self.try_get_account(name)?;
         if let Account::User(user) = owner { Ok(user) } else {
@@ -220,11 +219,6 @@ impl Client {
                 }
             })))
         }
-    }
-
-    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<Arc<HandleRepository>, GitHubError> {
-        Ok(self.try_get_account(name.as_ref())?
-            .try_get_repository(name.as_ref())?)
     }
 
     fn build_endpoint(endpoint: impl AsRef<str>) -> GitHubResult<Url, ClientError> {

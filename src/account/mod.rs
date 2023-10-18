@@ -1,7 +1,7 @@
 use std::{
-
-    sync::{Arc}, 
     
+    borrow::{Cow}, 
+
     fmt::{
 
         Formatter as FmtFormatter,
@@ -76,30 +76,30 @@ pub enum AccountError {
 }
 
 #[derive(Clone, Debug)]
-pub enum Account {
-    Organization(Arc<HandleOrganization>),
-    User(Arc<HandleUser>),
+pub enum Account<'a> {
+    Organization(HandleOrganization<'a>),
+    User(HandleUser<'a>),
 }
 
-impl Account {
-    pub(crate) fn from_name(client: Client, name: impl AsRef<str>) -> GitHubResult<Account, AccountError> {
-        let name = name.as_ref();
+impl<'a> Account<'a> {
+    pub(crate) fn try_from_name(client: Client, name: impl Into<Cow<'a, str>>) -> GitHubResult<Account<'a>, AccountError> {
+        let name = name.into();
 
         let account = client.get(format!("users/{name}"))?
             .send()?.json()?;
 
         match account {
-            User::Organization { name, .. } => Ok(Account::Organization(Arc::new_cyclic(|reference| {
-                HandleOrganization { reference: reference.clone(), client, name }
-            }))),
-            User::User { name, .. } => Ok(Account::User(Arc::new_cyclic(|reference| {
-                HandleUser { reference: reference.clone(), client, name }
-            }))),
+            User::Organization { .. } => Ok(Account::Organization({
+                HandleOrganization { client, name }
+            })),
+            User::User { .. } => Ok(Account::User({
+                HandleUser { client, name }
+            })),
             _ => Err(AccountError::Unsupported { account }),
         }
     }
 
-    pub(crate) fn get_client(&self) -> Client {
+    pub(crate) fn get_client(&'a self) -> &'a Client {
         match self {
             Account::Organization(organization) => organization.get_client(),
             Account::User(user) => user.get_client(),
@@ -129,40 +129,28 @@ impl Account {
         Ok(())
     }
 
-    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<Arc<HandleRepository>, AccountError> {
-        Ok(HandleRepository::try_fetch(self.clone(), name)?)
+    pub fn try_get_repository(&'a self, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleRepository<'a>, AccountError> {
+        Ok(HandleRepository::try_fetch(self, name)?)
     }
 
-    pub fn try_get_all_repositories(&self) -> GitHubResult<Vec<Arc<HandleRepository>>, AccountError> {
-        Ok(HandleRepository::try_fetch_all(self.clone())?)
-    }
-}
-
-impl From<Arc<HandleOrganization>> for Account {
-    fn from(organization: Arc<HandleOrganization>) -> Account {
-        Account::Organization(organization)
+    pub fn try_get_all_repositories(&self) -> GitHubResult<Vec<HandleRepository>, AccountError> {
+        Ok(HandleRepository::try_fetch_all(self)?)
     }
 }
 
-impl From<HandleOrganization> for Account {
-    fn from(organization: HandleOrganization) -> Account {
+impl<'a> From<HandleOrganization<'a>> for Account<'a> {
+    fn from(organization: HandleOrganization<'a>) -> Account<'a> {
         Account::Organization(organization.into())
     }
 }
 
-impl From<Arc<HandleUser>> for Account {
-    fn from(user: Arc<HandleUser>) -> Account {
-        Account::User(user)
-    }
-}
-
-impl From<HandleUser> for Account {
-    fn from(user: HandleUser) -> Account {
+impl<'a> From<HandleUser<'a>> for Account<'a> {
+    fn from(user: HandleUser<'a>) -> Account<'a> {
         Account::User(user.into())
     }
 }
 
-impl FmtDisplay for Account {
+impl<'a> FmtDisplay for Account<'a> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         match self {
             Account::Organization(organization) => write!(fmt, "{organization}"),

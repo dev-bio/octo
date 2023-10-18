@@ -1,7 +1,7 @@
 
 use std::{
 
-    sync::{Arc, Weak},
+    borrow::{Cow}, 
     path::{Path}, 
 
     fmt::{
@@ -66,17 +66,15 @@ pub enum CommitError {
     Nothing { commit: Sha<'static> },
 }
 
-#[derive(Debug, Clone)]
-pub struct HandleCommit {
-    pub(crate) reference: Weak<HandleCommit>,
-    pub(crate) repository: Arc<HandleRepository>,
+#[derive(Debug)]
+pub struct HandleCommit<'a> {
+    pub(crate) repository: &'a HandleRepository<'a>,
     pub(crate) date: Date,
-    pub(crate) sha: Sha<'static>,
+    pub(crate) sha: Sha<'a>,
 }
 
-impl HandleCommit {
-    pub(crate) fn try_fetch<'a>(repository: impl Into<Arc<HandleRepository>>, commit: impl Into<Sha<'a>>) -> GitHubResult<Arc<HandleCommit>, CommitError> {
-        let repository = repository.into();
+impl<'a> HandleCommit<'a> {
+    pub(crate) fn try_fetch(repository: &'a HandleRepository<'a>, commit: impl Into<Sha<'a>>) -> GitHubResult<HandleCommit<'a>, CommitError> {
         let commit = commit.into()
             .to_owned();
 
@@ -112,17 +110,14 @@ impl HandleCommit {
             }
         };
 
-        Ok(Arc::new_cyclic(|reference| HandleCommit {
-            reference: reference.clone(),
+        Ok(HandleCommit {
             repository,
             date,
             sha,
-        }))
+        })
     }
 
-    pub(crate) fn try_create(repository: impl Into<Arc<HandleRepository>>, parents: impl AsRef<[HandleCommit]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<Arc<HandleCommit>, CommitError> {
-        let repository = repository.into();
-
+    pub(crate) fn try_create(repository: &'a HandleRepository<'a>, parents: impl AsRef<[HandleCommit<'a>]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<HandleCommit<'a>, CommitError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct CapsuleAuthor {
@@ -158,19 +153,18 @@ impl HandleCommit {
                 .json()?
         };
 
-        Ok(Arc::new_cyclic(|reference| HandleCommit {
-            reference: reference.clone(),
+        Ok(HandleCommit {
             repository,
             date,
             sha,
-        }))
+        })
     }
 
-    pub fn try_compare(&self, head: impl AsRef<HandleCommit>) -> GitHubResult<Compare, CommitError> {
-        Ok(Compare::try_from_base_head(self.repository.clone(), self.get_reference(), head.as_ref())?)
+    pub fn try_compare(&self, head: &'a HandleCommit<'a>) -> GitHubResult<Compare, CommitError> {
+        Ok(Compare::try_from_base_head(self.repository, self, head)?)
     }
 
-    pub fn try_get_parents(&self) -> GitHubResult<Vec<Arc<HandleCommit>>, CommitError> {
+    pub fn try_get_parents(&self) -> GitHubResult<Vec<HandleCommit<'a>>, CommitError> {
         let Self { repository, .. } = { self };
 
         #[derive(Debug)]
@@ -195,7 +189,7 @@ impl HandleCommit {
 
         let mut collection = Vec::new();
         for CapsuleParents { sha } in parents.iter() {
-            collection.push(HandleCommit::try_fetch(repository.clone(), {
+            collection.push(HandleCommit::try_fetch(repository, {
                 sha.clone()
             })?);
         }
@@ -227,15 +221,17 @@ impl HandleCommit {
             tree: CapsuleTree { sha } 
         } = response.json()?;
 
-        Ok(Tree::try_fetch(repository.clone(), sha, recursive)?)
+        Ok(Tree::try_fetch(repository, sha, recursive)?)
     }
 
     pub fn try_get_date(&self) -> GitHubResult<Date, CommitError> {
-        let repository = self.repository.clone();
-        let client = self.repository.get_client();
+        let response = {
 
-        let response = client.get(format!("repos/{repository}/git/commits/{self}"))?
-            .send()?;
+            self.repository.get_client()
+                .get(format!("repos/{repository}/git/commits/{self}", repository = {
+                    self.repository
+                }))?.send()?
+        };
 
         #[derive(Debug)]
         #[derive(Deserialize)]
@@ -270,10 +266,6 @@ impl HandleCommit {
         Ok(ZipArchive::new(cursor)?
             .extract(path.as_ref())?)
     }
-    
-    pub fn get_repository(&self) -> Arc<HandleRepository> {
-        self.repository.clone()
-    }
 
     pub fn get_date(&self) -> Date {
         self.date.clone()
@@ -284,41 +276,32 @@ impl HandleCommit {
     }
 }
 
-impl GitHubProperties for HandleCommit {
+impl<'a> GitHubProperties<'a> for HandleCommit<'a> {
     type Content = Commit;
-    type Parent = Arc<HandleRepository>;
+    type Parent = HandleRepository<'a>;
     
-    fn get_client(&self) -> Client {
+    fn get_client(&'a self) -> &'a Client {
         self.get_parent()
             .get_client()
     }
     
-    fn get_parent(&self) -> Self::Parent {
-        self.repository.clone()
+    fn get_parent(&self) -> &'a Self::Parent {
+        self.repository
     }
     
-    fn get_endpoint(&self) -> String {
+    fn get_endpoint(&self) -> Cow<'a, str> {
         let HandleCommit { repository, .. } = { self };
-        format!("repos/{repository}/git/commits/{self}")
-    }
-
-    fn get_reference(&self) -> Arc<Self> {
-        self.reference.upgrade()
-            .unwrap()
+        format!("repos/{repository}/git/commits/{self}").into()
     }
 }
 
-impl AsRef<HandleCommit> for HandleCommit {
-    fn as_ref(&self) -> &HandleCommit { self }
-}
-
-impl FmtDisplay for HandleCommit {
+impl<'a> FmtDisplay for HandleCommit<'a> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{sha}", sha = self.sha)
     }
 }
 
-impl Into<Sha<'static>> for HandleCommit {
+impl<'a> Into<Sha<'static>> for HandleCommit<'a> {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
     }

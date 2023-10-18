@@ -1,7 +1,7 @@
 use std::{
-    
-    sync::{Arc, Weak}, 
 
+    borrow::{Cow},
+    
     fmt::{
     
         Formatter as FmtFormatter,
@@ -47,7 +47,7 @@ use serde::{Deserialize};
 
 use thiserror::{Error};
 
-mod comment;
+pub mod comment;
 
 #[derive(Error, Debug)]
 pub enum IssueError {
@@ -63,16 +63,14 @@ pub enum IssueError {
     Assignee { assignee: String },
 }
 
-#[derive(Clone, Debug)]
-pub struct HandleIssue {
-    reference: Weak<HandleIssue>,
-    repository: Arc<HandleRepository>,
-    number: Number,
+#[derive(Debug)]
+pub struct HandleIssue<'a> {
+    repository: &'a HandleRepository<'a>,
+    number: Number, 
 }
 
-impl HandleIssue {
-    pub(crate) fn try_fetch(repository: impl Into<Arc<HandleRepository>>, number: Number) -> GitHubResult<Arc<HandleIssue>, IssueError> {
-        let repository = repository.into();
+impl<'a> HandleIssue<'a> {
+    pub(crate) fn try_fetch(repository: &'a HandleRepository<'a>, number: Number) -> GitHubResult<HandleIssue<'a>, IssueError> {
 
         #[derive(Debug)]
         #[derive(Deserialize)]
@@ -102,16 +100,13 @@ impl HandleIssue {
             return Err(IssueError::Issue { number });
         }
 
-        Ok(Arc::new_cyclic(|reference| HandleIssue {
-            reference: reference.clone(), 
-            repository: repository.clone(),
+        Ok(HandleIssue {
+            repository,
             number,
-        }))
+        })
     }
 
-    pub(crate) fn try_fetch_all(repository: impl Into<Arc<HandleRepository>>) -> GitHubResult<Vec<Arc<HandleIssue>>, IssueError> {
-        let repository = repository.into();
-
+    pub(crate) fn try_fetch_all(repository: &'a HandleRepository<'a>) -> GitHubResult<Vec<HandleIssue<'a>>, IssueError> {
         let mut collection = Vec::new();
         let mut page = 0;
 
@@ -148,11 +143,11 @@ impl HandleIssue {
                 continue 
             }
 
-            issues.push(Arc::new_cyclic(|reference| HandleIssue {
-                reference: reference.clone(), 
-                repository: repository.clone(),
-                number: issue.get_number(),
-            }));
+            issues.push(HandleIssue {
+                repository, number: {
+                    issue.get_number()
+                },
+            });
         }
 
         Ok(issues)
@@ -198,32 +193,32 @@ impl HandleIssue {
         Ok(assignees)
     }
 
-    pub fn try_get_comment(&self, number: Number) -> GitHubResult<Arc<HandleIssueComment>, IssueError> {
-        Ok(HandleIssueComment::try_fetch(self.get_reference(), number)?)
+    pub fn try_get_comment(&'a self, number: Number) -> GitHubResult<HandleIssueComment<'a>, IssueError> {
+        Ok(HandleIssueComment::try_fetch(self, number)?)
     }
 
     pub fn try_has_comment(&self, number: Number) -> GitHubResult<bool, IssueError> {
-        match HandleIssueComment::try_fetch(self.get_reference(), number) {
+        match HandleIssueComment::try_fetch(self, number) {
             Err(IssueCommentError::Nothing { .. }) => Ok(false),
             Err(error) => Err(IssueError::Comment(error)),
             Ok(_) => Ok(true),
         }
     }
 
-    pub fn try_get_all_issue_comments(&self) -> GitHubResult<Vec<Arc<HandleIssueComment>>, IssueError> {
-        Ok(HandleIssueComment::try_fetch_all(self.get_reference())?)
+    pub fn try_get_all_issue_comments(&'a self) -> GitHubResult<Vec<HandleIssueComment<'a>>, IssueError> {
+        Ok(HandleIssueComment::try_fetch_all(self)?)
     }
 
     pub fn try_has_comments(&self) -> GitHubResult<bool, IssueError> {
-        match HandleIssueComment::try_fetch_all(self.get_reference()) {
+        match HandleIssueComment::try_fetch_all(self) {
             Err(IssueCommentError::Nothing { .. }) => Ok(false),
             Err(error) => Err(IssueError::Comment(error)),
             Ok(_) => Ok(true),
         }
     }
 
-    pub fn try_create_comment(&self, content: impl AsRef<str>) -> GitHubResult<Arc<HandleIssueComment>, IssueError> {
-        Ok(HandleIssueComment::try_create(self.get_reference(), content.as_ref())?)
+    pub fn try_create_comment(&'a self, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment<'a>, IssueError> {
+        Ok(HandleIssueComment::try_create(self, content.as_ref())?)
     }
 
     pub fn try_delete_comment(&self, number: Number) -> GitHubResult<(), IssueError> {
@@ -231,35 +226,26 @@ impl HandleIssue {
     }
 }
 
-impl GitHubProperties for HandleIssue {
+impl<'a> GitHubProperties<'a> for HandleIssue<'a> {
     type Content = Issue;
-    type Parent = Arc<HandleRepository>;
+    type Parent = HandleRepository<'a>;
 
-    fn get_client(&self) -> Client {
+    fn get_client(&'a self) -> &'a Client {
         self.get_parent()
             .get_client()
     }
     
-    fn get_parent(&self) -> Self::Parent {
-        self.repository.clone()
+    fn get_parent(&self) -> &'a Self::Parent {
+        self.repository
     }
 
-    fn get_endpoint(&self) -> String {
+    fn get_endpoint(&self) -> Cow<'a, str> {
         let Self { repository, .. } = { self };
-        format!("repos/{repository}/issues/{self}")
-    }
-
-    fn get_reference(&self) -> Arc<Self> {
-        self.reference.upgrade()
-            .unwrap()
+        format!("repos/{repository}/issues/{self}").into()
     }
 }
 
-impl AsRef<HandleIssue> for HandleIssue {
-    fn as_ref(&self) -> &Self { self }
-}
-
-impl FmtDisplay for HandleIssue {
+impl<'a> FmtDisplay for HandleIssue<'a> {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{number}", number = {
             self.number.clone()
