@@ -237,7 +237,7 @@ impl<'a> Tree<'a> {
         })
     }
 
-    pub(crate) fn try_create_with_base(repository: &'a HandleRepository<'a>, base: &'a HandleCommit<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree<'a>, HandleRepositoryError> {
+    pub(crate) fn try_create_with_base(repository: &'a HandleRepository<'a>, base: HandleCommit<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree<'a>, HandleRepositoryError> {
         let tree = { base.try_get_tree(false)? };
 
         #[derive(Debug)]

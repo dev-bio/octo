@@ -392,7 +392,7 @@ impl<'a> HandleRepository<'a> {
         Ok(Tree::try_create(self, entries)?)
     }
 
-    pub fn try_create_tree_with_base(&self, base: &'a HandleCommit<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
+    pub fn try_create_tree_with_base(&self, base: HandleCommit<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
         Ok(Tree::try_create_with_base(self, base, entries)?)
     }
 
