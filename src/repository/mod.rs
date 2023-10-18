@@ -101,7 +101,7 @@ pub enum HandleRepositoryError {
     Archive(#[from] ZipError),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HandleRepository<'a> {
     pub(crate) owner: &'a Account<'a>,
     pub(crate) name: Cow<'a, str>,

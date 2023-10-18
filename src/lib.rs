@@ -42,7 +42,7 @@ pub enum GitHubError {
 pub type GitHubResult<T, E = GitHubError> = Result<T, E>;
 
 pub trait GitHubProperties<'a>
-where Self: Sized {
+where Self: Sized + Clone {
 
     type Content: DeserializeOwned + FmtDebug;
     type Parent;

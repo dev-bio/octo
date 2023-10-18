@@ -63,7 +63,7 @@ pub enum IssueError {
     Assignee { assignee: String },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HandleIssue<'a> {
     repository: &'a HandleRepository<'a>,
     number: Number, 

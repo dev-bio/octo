@@ -66,7 +66,7 @@ pub enum CommitError {
     Nothing { commit: Sha<'static> },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HandleCommit<'a> {
     pub(crate) repository: &'a HandleRepository<'a>,
     pub(crate) date: Date,
@@ -160,8 +160,8 @@ impl<'a> HandleCommit<'a> {
         })
     }
 
-    pub fn try_compare(&self, head: &'a HandleCommit<'a>) -> GitHubResult<Compare, CommitError> {
-        Ok(Compare::try_from_base_head(self.repository, self, head)?)
+    pub fn try_compare(&self, head: HandleCommit<'a>) -> GitHubResult<Compare, CommitError> {
+        Ok(Compare::try_from_base_head(self.repository, self.clone(), head)?)
     }
 
     pub fn try_get_parents(&self) -> GitHubResult<Vec<HandleCommit<'a>>, CommitError> {

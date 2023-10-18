@@ -47,7 +47,7 @@ pub enum HandleTeamError {
     Organization { account: User },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HandleTeam<'a> {
     pub(crate) organization: &'a HandleOrganization<'a>,
     pub(crate) slug: String,

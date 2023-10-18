@@ -84,15 +84,15 @@ pub enum CompareError {
     Client(#[from] ClientError),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Compare<'a> {
     files: Vec<CompareFile>,
-    base: &'a HandleCommit<'a>,
-    head: &'a HandleCommit<'a>,
+    base: HandleCommit<'a>,
+    head: HandleCommit<'a>,
 }
 
 impl<'a> Compare<'a> {
-    pub fn try_from_base_head(repository: &'a HandleRepository<'a>, base: &'a HandleCommit<'a>, head: &'a HandleCommit<'a>) -> GitHubResult<Compare<'a>, CompareError> {
+    pub fn try_from_base_head(repository: &'a HandleRepository<'a>, base: HandleCommit<'a>, head: HandleCommit<'a>) -> GitHubResult<Compare<'a>, CompareError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -120,11 +120,11 @@ impl<'a> Compare<'a> {
         self.files.as_ref()
     }
 
-    pub fn get_base(&self) -> &'a HandleCommit<'a> {
-        self.base
+    pub fn get_base(&self) -> HandleCommit<'a> {
+        self.base.clone()
     }
 
-    pub fn get_head(&self) -> &'a HandleCommit<'a>{
+    pub fn get_head(&self) -> HandleCommit<'a>{
         self.head.clone()
     }
 }

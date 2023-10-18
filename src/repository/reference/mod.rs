@@ -50,7 +50,7 @@ pub enum ReferenceError {
     Delete,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum HandleReference<'a> {
     PullRequest { repository: &'a HandleRepository<'a>, branch: String, issue: Number },
     Branch { repository: &'a HandleRepository<'a>, branch: String },

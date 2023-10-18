@@ -40,7 +40,7 @@ pub enum IssueCommentError {
     Nothing { number: Number },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HandleIssueComment<'a> {
     issue: &'a HandleIssue<'a>,
     number: Number,
