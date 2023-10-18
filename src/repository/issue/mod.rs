@@ -65,12 +65,12 @@ pub enum IssueError {
 
 #[derive(Clone, Debug)]
 pub struct HandleIssue<'a> {
-    repository: &'a HandleRepository<'a>,
+    repository: HandleRepository<'a>,
     number: Number, 
 }
 
 impl<'a> HandleIssue<'a> {
-    pub(crate) fn try_fetch(repository: &'a HandleRepository<'a>, number: Number) -> GitHubResult<HandleIssue<'a>, IssueError> {
+    pub(crate) fn try_fetch(repository: HandleRepository<'a>, number: Number) -> GitHubResult<HandleIssue, IssueError> {
 
         #[derive(Debug)]
         #[derive(Deserialize)]
@@ -106,7 +106,7 @@ impl<'a> HandleIssue<'a> {
         })
     }
 
-    pub(crate) fn try_fetch_all(repository: &'a HandleRepository<'a>) -> GitHubResult<Vec<HandleIssue<'a>>, IssueError> {
+    pub(crate) fn try_fetch_all(repository: HandleRepository<'a>) -> GitHubResult<Vec<HandleIssue>, IssueError> {
         let mut collection = Vec::new();
         let mut page = 0;
 
@@ -144,7 +144,7 @@ impl<'a> HandleIssue<'a> {
             }
 
             issues.push(HandleIssue {
-                repository, number: {
+                repository: repository.clone(), number: {
                     issue.get_number()
                 },
             });
@@ -193,36 +193,36 @@ impl<'a> HandleIssue<'a> {
         Ok(assignees)
     }
 
-    pub fn try_get_comment(&'a self, number: Number) -> GitHubResult<HandleIssueComment<'a>, IssueError> {
-        Ok(HandleIssueComment::try_fetch(self, number)?)
+    pub fn try_get_comment(&'a self, number: Number) -> GitHubResult<HandleIssueComment, IssueError> {
+        Ok(HandleIssueComment::try_fetch(self.clone(), number)?)
     }
 
     pub fn try_has_comment(&self, number: Number) -> GitHubResult<bool, IssueError> {
-        match HandleIssueComment::try_fetch(self, number) {
+        match HandleIssueComment::try_fetch(self.clone(), number) {
             Err(IssueCommentError::Nothing { .. }) => Ok(false),
             Err(error) => Err(IssueError::Comment(error)),
             Ok(_) => Ok(true),
         }
     }
 
-    pub fn try_get_all_issue_comments(&'a self) -> GitHubResult<Vec<HandleIssueComment<'a>>, IssueError> {
-        Ok(HandleIssueComment::try_fetch_all(self)?)
+    pub fn try_get_all_issue_comments(&'a self) -> GitHubResult<Vec<HandleIssueComment>, IssueError> {
+        Ok(HandleIssueComment::try_fetch_all(self.clone())?)
     }
 
     pub fn try_has_comments(&self) -> GitHubResult<bool, IssueError> {
-        match HandleIssueComment::try_fetch_all(self) {
+        match HandleIssueComment::try_fetch_all(self.clone()) {
             Err(IssueCommentError::Nothing { .. }) => Ok(false),
             Err(error) => Err(IssueError::Comment(error)),
             Ok(_) => Ok(true),
         }
     }
 
-    pub fn try_create_comment(&'a self, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment<'a>, IssueError> {
-        Ok(HandleIssueComment::try_create(self, content.as_ref())?)
+    pub fn try_create_comment(&'a self, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment, IssueError> {
+        Ok(HandleIssueComment::try_create(self.clone(), content.as_ref())?)
     }
 
-    pub fn try_delete_comment(&self, number: Number) -> GitHubResult<(), IssueError> {
-        Ok(HandleIssueComment::try_delete(self, number)?)
+    pub fn try_delete_comment(&'a self, number: Number) -> GitHubResult<(), IssueError> {
+        Ok(HandleIssueComment::try_delete(self.clone(), number)?)
     }
 }
 
@@ -235,8 +235,8 @@ impl<'a> GitHubProperties<'a> for HandleIssue<'a> {
             .get_client()
     }
     
-    fn get_parent(&self) -> &'a Self::Parent {
-        self.repository
+    fn get_parent(&'a self) -> &'a Self::Parent {
+        &(self.repository)
     }
 
     fn get_endpoint(&self) -> Cow<'a, str> {

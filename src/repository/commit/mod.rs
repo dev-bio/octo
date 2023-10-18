@@ -68,13 +68,13 @@ pub enum CommitError {
 
 #[derive(Clone, Debug)]
 pub struct HandleCommit<'a> {
-    pub(crate) repository: &'a HandleRepository<'a>,
+    pub(crate) repository: HandleRepository<'a>,
     pub(crate) date: Date,
     pub(crate) sha: Sha<'a>,
 }
 
 impl<'a> HandleCommit<'a> {
-    pub(crate) fn try_fetch(repository: &'a HandleRepository<'a>, commit: impl Into<Sha<'a>>) -> GitHubResult<HandleCommit<'a>, CommitError> {
+    pub(crate) fn try_fetch(repository: HandleRepository<'a>, commit: impl Into<Sha<'a>>) -> GitHubResult<HandleCommit<'a>, CommitError> {
         let commit = commit.into()
             .to_owned();
 
@@ -117,7 +117,7 @@ impl<'a> HandleCommit<'a> {
         })
     }
 
-    pub(crate) fn try_create(repository: &'a HandleRepository<'a>, parents: impl AsRef<[HandleCommit<'a>]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<HandleCommit<'a>, CommitError> {
+    pub(crate) fn try_create(repository: HandleRepository<'a>, parents: impl AsRef<[HandleCommit<'a>]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<HandleCommit<'a>, CommitError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct CapsuleAuthor {
@@ -161,10 +161,10 @@ impl<'a> HandleCommit<'a> {
     }
 
     pub fn try_compare(&self, head: HandleCommit<'a>) -> GitHubResult<Compare, CommitError> {
-        Ok(Compare::try_from_base_head(self.repository, self.clone(), head)?)
+        Ok(Compare::try_from_base_head(self.repository.clone(), self.clone(), head)?)
     }
 
-    pub fn try_get_parents(&self) -> GitHubResult<Vec<HandleCommit<'a>>, CommitError> {
+    pub fn try_get_parents(&self) -> GitHubResult<Vec<HandleCommit>, CommitError> {
         let Self { repository, .. } = { self };
 
         #[derive(Debug)]
@@ -189,7 +189,7 @@ impl<'a> HandleCommit<'a> {
 
         let mut collection = Vec::new();
         for CapsuleParents { sha } in parents.iter() {
-            collection.push(HandleCommit::try_fetch(repository, {
+            collection.push(HandleCommit::try_fetch(repository.clone(), {
                 sha.clone()
             })?);
         }
@@ -224,13 +224,14 @@ impl<'a> HandleCommit<'a> {
         Ok(Tree::try_fetch(repository, sha, recursive)?)
     }
 
-    pub fn try_get_date(&self) -> GitHubResult<Date, CommitError> {
+    pub fn try_get_date(&'a self) -> GitHubResult<Date, CommitError> {
+        let repository = self.get_parent();
+
         let response = {
 
-            self.repository.get_client()
-                .get(format!("repos/{repository}/git/commits/{self}", repository = {
-                    self.repository
-                }))?.send()?
+            repository.get_client()
+                .get(format!("repos/{repository}/git/commits/{self}"))?
+                .send()?
         };
 
         #[derive(Debug)]
@@ -285,8 +286,8 @@ impl<'a> GitHubProperties<'a> for HandleCommit<'a> {
             .get_client()
     }
     
-    fn get_parent(&self) -> &'a Self::Parent {
-        self.repository
+    fn get_parent(&'a self) -> &'a Self::Parent {
+        &(self.repository)
     }
     
     fn get_endpoint(&self) -> Cow<'a, str> {

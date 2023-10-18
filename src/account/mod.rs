@@ -130,11 +130,11 @@ impl<'a> Account<'a> {
     }
 
     pub fn try_get_repository(&'a self, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleRepository<'a>, AccountError> {
-        Ok(HandleRepository::try_fetch(self, name)?)
+        Ok(HandleRepository::try_fetch(self.clone(), name)?)
     }
 
-    pub fn try_get_all_repositories(&self) -> GitHubResult<Vec<HandleRepository>, AccountError> {
-        Ok(HandleRepository::try_fetch_all(self)?)
+    pub fn try_get_all_repositories(&'a self) -> GitHubResult<Vec<HandleRepository>, AccountError> {
+        Ok(HandleRepository::try_fetch_all(self.clone())?)
     }
 }
 

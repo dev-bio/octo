@@ -92,7 +92,7 @@ pub struct Compare<'a> {
 }
 
 impl<'a> Compare<'a> {
-    pub fn try_from_base_head(repository: &'a HandleRepository<'a>, base: HandleCommit<'a>, head: HandleCommit<'a>) -> GitHubResult<Compare<'a>, CompareError> {
+    pub fn try_from_base_head(repository: HandleRepository<'a>, base: HandleCommit<'a>, head: HandleCommit<'a>) -> GitHubResult<Compare<'a>, CompareError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {

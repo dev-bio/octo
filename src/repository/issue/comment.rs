@@ -42,12 +42,12 @@ pub enum IssueCommentError {
 
 #[derive(Clone, Debug)]
 pub struct HandleIssueComment<'a> {
-    issue: &'a HandleIssue<'a>,
+    issue: HandleIssue<'a>,
     number: Number,
 }
 
 impl<'a> HandleIssueComment<'a> {
-    pub(crate) fn try_fetch(issue: &'a HandleIssue<'a>, number: Number) -> GitHubResult<HandleIssueComment<'a>, IssueCommentError> {
+    pub(crate) fn try_fetch(issue: HandleIssue<'a>, number: Number) -> GitHubResult<HandleIssueComment, IssueCommentError> {
         let Comment { number, .. } = {
 
             let repository = issue.get_parent();
@@ -73,7 +73,7 @@ impl<'a> HandleIssueComment<'a> {
         })
     }
 
-    pub(crate) fn try_fetch_all(issue: &'a HandleIssue<'a>) -> GitHubResult<Vec<HandleIssueComment<'a>>, IssueCommentError> {
+    pub(crate) fn try_fetch_all(issue: HandleIssue<'a>) -> GitHubResult<Vec<HandleIssueComment>, IssueCommentError> {
         let repository = issue.get_parent();
 
         let mut collection = Vec::new();
@@ -116,14 +116,14 @@ impl<'a> HandleIssueComment<'a> {
         let mut issues = Vec::new();
         for Comment { number, .. } in collection {
             issues.push(HandleIssueComment {
-                issue, number
+                issue: issue.clone(), number
             });
         }
 
         Ok(issues)
     }
 
-    pub fn try_create(issue: &'a HandleIssue<'a>, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment<'a>, IssueCommentError> {
+    pub fn try_create(issue: HandleIssue<'a>, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment, IssueCommentError> {
         let repository = issue.get_parent();
 
         let ref payload = serde_json::json!({
@@ -145,7 +145,7 @@ impl<'a> HandleIssueComment<'a> {
         })
     }
 
-    pub fn try_delete(issue: &'a HandleIssue<'a>, number: usize) -> GitHubResult<(), IssueCommentError> {
+    pub fn try_delete(issue: HandleIssue<'a>, number: usize) -> GitHubResult<(), IssueCommentError> {
         let repository = issue.get_parent();
         
         let _ = {
@@ -168,8 +168,8 @@ impl<'a> GitHubProperties<'a> for HandleIssueComment<'a> {
             .get_client()
     }
     
-    fn get_parent(&self) -> &'a Self::Parent {
-        self.issue
+    fn get_parent(&'a self) -> &'a Self::Parent {
+        &(self.issue)
     }
 
     fn get_endpoint(&'a self) -> Cow<'a, str> {
