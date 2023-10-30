@@ -4,21 +4,23 @@ use super::{HandleOrganization};
 use crate::{GitHubProperties};
 
 #[derive(Debug)]
-pub struct HandleActions<'a> {
-    pub(crate) organization: &'a HandleOrganization<'a>,
+pub struct HandleActions {
+    pub(crate) organization: HandleOrganization,
 }
 
-impl<'a> HandleActions<'a> {
-    pub(crate) fn from(organization: &'a HandleOrganization<'a>) -> HandleActions<'a> {
-        HandleActions { organization }
+impl HandleActions {
+    pub(crate) fn from(organization: &HandleOrganization) -> HandleActions {
+        HandleActions { organization: organization.clone() }
     }
 
-    pub fn try_set_allow_list<P: AsRef<str>>(&'a self, set: impl AsRef<[P]>) -> Result<&'a HandleActions<'a>> {
+    pub fn try_set_allow_list<P: AsRef<str>>(&self, set: impl AsRef<[P]>) -> Result<&HandleActions> {
+        let HandleActions { organization, .. } = { self };
+
         use model::{AllowedActions};
 
-        let AllowedActions { verified, native, .. } = AllowedActions::from({
-            self.organization
-        })?;
+        let AllowedActions { verified, native, .. } = {
+            AllowedActions::from(organization)?
+        };
 
         let mut list: Vec<String> = set.as_ref().iter()
             .map(|item| item.as_ref().to_owned())
@@ -42,12 +44,14 @@ impl<'a> HandleActions<'a> {
         Ok(self)
     }
 
-    pub fn try_add_allow_list<P: AsRef<str>>(&'a self, add: impl AsRef<[P]>) -> Result<&'a HandleActions<'a>> {
+    pub fn try_add_allow_list<P: AsRef<str>>(&self, add: impl AsRef<[P]>) -> Result<&HandleActions> {
+        let HandleActions { organization, .. } = { self };
+
         use model::{AllowedActions};
 
-        let AllowedActions { verified, native, mut list } = AllowedActions::from({
-            self.organization
-        })?;
+        let AllowedActions { verified, native, mut list } = {
+            AllowedActions::from(organization)?
+        };
 
         list.extend(add.as_ref().iter().map(|item| {
             item.as_ref().to_owned()
@@ -72,22 +76,25 @@ impl<'a> HandleActions<'a> {
     }
 
     pub fn try_get_allow_list(&self) -> Result<Vec<String>> {
+        let HandleActions { organization, .. } = { self };
+
         use model::{AllowedActions};
 
-        let AllowedActions { list, .. } = AllowedActions::from({
-            self.organization
-        })?;
+        let AllowedActions { list, .. } = {
+            AllowedActions::from(organization)?
+        };
 
         Ok(list)
     }
 
     pub fn try_set_allow_native(&self, native: bool) -> Result<&Self> {
+        let HandleActions { organization, .. } = { self };
+
         use model::{AllowedActions};
 
-        let AllowedActions { verified, list, .. } = AllowedActions::from({
-            self.organization
-        })?;
-
+        let AllowedActions { verified, list, .. } = {
+            AllowedActions::from(organization)?
+        };
 
         let ref payload = AllowedActions {
             verified,
@@ -105,21 +112,25 @@ impl<'a> HandleActions<'a> {
     }
 
     pub fn try_get_allow_native(&self) -> Result<bool> {
+        let HandleActions { organization, .. } = { self };
+
         use model::{AllowedActions};
 
-        let AllowedActions { native, .. } = AllowedActions::from({
-            self.organization
-        })?;
+        let AllowedActions { native, .. } = {
+            AllowedActions::from(organization)?
+        };
 
         Ok(native)
     }
 
-    pub fn try_set_allow_verified(&'a self, verified: bool) -> Result<&'a HandleActions<'a>> {
+    pub fn try_set_allow_verified(&self, verified: bool) -> Result<&HandleActions> {
+        let HandleActions { organization, .. } = { self };
+
         use model::{AllowedActions};
 
-        let AllowedActions { native, list, .. } = AllowedActions::from({
-            self.organization
-        })?;
+        let AllowedActions { native, list, .. } = {
+            AllowedActions::from(organization)?
+        };
 
         let ref payload = AllowedActions {
             verified,
@@ -141,11 +152,13 @@ impl<'a> HandleActions<'a> {
     }
 
     pub fn try_get_allow_verified(&self) -> Result<bool> {
+        let HandleActions { organization, .. } = { self };
+
         use model::{AllowedActions};
 
-        let AllowedActions { verified, .. } = AllowedActions::from({
-            self.organization
-        })?;
+        let AllowedActions { verified, .. } = {
+            AllowedActions::from(organization)?
+        };
 
         Ok(verified)
     }
@@ -175,7 +188,7 @@ mod model {
     }
 
     impl AllowedActions {
-        pub(super) fn from<'a>(organization: &'a HandleOrganization<'a>) -> Result<Self> {
+        pub(super) fn from(organization: &HandleOrganization) -> Result<Self> {
             let response = {
                 
                 organization.get_client()

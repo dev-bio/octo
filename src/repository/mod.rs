@@ -102,14 +102,14 @@ pub enum HandleRepositoryError {
 }
 
 #[derive(Clone, Debug)]
-pub struct HandleRepository<'a> {
-    pub(crate) owner: Account<'a>,
-    pub(crate) name: Cow<'a, str>,
+pub struct HandleRepository {
+    pub(crate) owner: Account,
+    pub(crate) name: String,
 }
 
-impl<'a> HandleRepository<'a> {
-    pub(crate) fn try_fetch(owner: Account<'a>, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleRepository<'a>, HandleRepositoryError> {
-        let name = name.into();
+impl HandleRepository {
+    pub(crate) fn try_fetch(owner: &Account, name: impl AsRef<str>) -> GitHubResult<HandleRepository, HandleRepositoryError> {
+        let name = name.as_ref();
 
         let components: Vec<_> = name.split('/')
             .collect();
@@ -122,11 +122,12 @@ impl<'a> HandleRepository<'a> {
         };
 
         Ok(HandleRepository {
-            owner, name
+            owner: owner.clone(),
+            name: name.to_owned(),
         })
     }
 
-    pub(crate) fn try_fetch_all(owner: Account<'a>) -> GitHubResult<Vec<HandleRepository<'a>>, HandleRepositoryError> {
+    pub(crate) fn try_fetch_all(owner: &'_ Account) -> GitHubResult<Vec<HandleRepository>, HandleRepositoryError> {
         #[derive(Clone, Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -198,12 +199,12 @@ impl<'a> HandleRepository<'a> {
         Ok(total_count)
     }
 
-    pub fn try_get_issue(&'a self, id: usize) -> GitHubResult<HandleIssue, HandleRepositoryError> {
-        Ok(HandleIssue::try_fetch(self.clone(), id)?)
+    pub fn try_get_issue(&self, id: usize) -> GitHubResult<HandleIssue, HandleRepositoryError> {
+        Ok(HandleIssue::try_fetch(self, id)?)
     }
 
-    pub fn try_get_all_issues(&'a self) -> GitHubResult<Vec<HandleIssue>, HandleRepositoryError> {
-        Ok(HandleIssue::try_fetch_all(self.clone())?)
+    pub fn try_get_all_issues(&self) -> GitHubResult<Vec<HandleIssue>, HandleRepositoryError> {
+        Ok(HandleIssue::try_fetch_all(self)?)
     }
 
     pub fn try_has_tag(&self, tag: impl AsRef<str>) -> GitHubResult<bool, HandleRepositoryError> {
@@ -213,8 +214,8 @@ impl<'a> HandleRepository<'a> {
     pub fn try_get_some_tag(&self, tag: impl AsRef<str>) -> GitHubResult<Option<HandleReference>, HandleRepositoryError> {
         let tag = tag.as_ref();
 
-        let candidate = match HandleReference::try_parse(self.clone(), tag) {
-            Ok(reference) => reference, _ => HandleReference::try_parse(self.clone(), {
+        let candidate = match HandleReference::try_parse(self, tag) {
+            Ok(reference) => reference, _ => HandleReference::try_parse(self, {
                 format!("tags/{tag}")
             })?,
         };
@@ -230,8 +231,8 @@ impl<'a> HandleRepository<'a> {
     pub fn try_get_tag(&self, tag: impl AsRef<str>) -> GitHubResult<HandleReference, HandleRepositoryError> {
         let tag = tag.as_ref();
 
-        let candidate = match HandleReference::try_parse(self.clone(), tag) {
-            Err(_) => HandleReference::try_parse(self.clone(), {
+        let candidate = match HandleReference::try_parse(self, tag) {
+            Err(_) => HandleReference::try_parse(self, {
                 format!("tags/{tag}")
             })?,
             Ok(reference) => {
@@ -251,11 +252,11 @@ impl<'a> HandleRepository<'a> {
         Ok(self.try_get_some_branch(branch)?.is_some())
     }
 
-    pub fn try_get_some_branch(&'a self, branch: impl AsRef<str>) -> GitHubResult<Option<HandleReference>, HandleRepositoryError> {
+    pub fn try_get_some_branch(&self, branch: impl AsRef<str>) -> GitHubResult<Option<HandleReference>, HandleRepositoryError> {
         let branch = branch.as_ref();
 
-        let candidate = match HandleReference::try_parse(self.clone(), branch) {
-            Ok(reference) => reference, _ => HandleReference::try_parse(self.clone(), {
+        let candidate = match HandleReference::try_parse(self, branch) {
+            Ok(reference) => reference, _ => HandleReference::try_parse(self, {
                 format!("heads/{branch}")
             })?,
         };
@@ -268,11 +269,11 @@ impl<'a> HandleRepository<'a> {
         }
     }
 
-    pub fn try_get_branch(&'a self, branch: impl AsRef<str>) -> GitHubResult<HandleReference, HandleRepositoryError> {
+    pub fn try_get_branch(&self, branch: impl AsRef<str>) -> GitHubResult<HandleReference, HandleRepositoryError>  {
         let branch = branch.as_ref();
 
-        let candidate = match HandleReference::try_parse(self.clone(), branch) {
-            Err(_) => HandleReference::try_parse(self.clone(), {
+        let candidate = match HandleReference::try_parse(self, branch) {
+            Err(_) => HandleReference::try_parse(self, {
                 format!("heads/{branch}")
             })?,
             Ok(reference) => {
@@ -288,7 +289,7 @@ impl<'a> HandleRepository<'a> {
         }
     }
 
-    pub fn try_get_default_branch(&'a self) -> GitHubResult<HandleReference<'a>, HandleRepositoryError> {
+    pub fn try_get_default_branch(&self) -> GitHubResult<HandleReference, HandleRepositoryError>  {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -309,7 +310,7 @@ impl<'a> HandleRepository<'a> {
     }
 
     pub fn try_get_some_reference(&self, reference: impl AsRef<str>) -> GitHubResult<Option<HandleReference>, HandleRepositoryError> {
-        match HandleReference::try_fetch(self.clone(), reference) {
+        match HandleReference::try_fetch(self, reference) {
             Err(ReferenceError::Nothing { .. }) => Ok(None),
             Err(error) => Err(error.into()),
             Ok(ok) => Ok(Some(ok)),
@@ -317,13 +318,13 @@ impl<'a> HandleRepository<'a> {
     }
 
     pub fn try_get_reference(&self, reference: impl AsRef<str>) -> GitHubResult<HandleReference, HandleRepositoryError> {
-        Ok(HandleReference::try_fetch(self.clone(), reference)?)
+        Ok(HandleReference::try_fetch(self, reference)?)
     }
 
-    pub fn try_create_tag(&self, tag: impl AsRef<str>, commit: HandleCommit) -> GitHubResult<HandleReference, HandleRepositoryError> {
+    pub fn try_create_tag(&self, tag: impl AsRef<str>, commit: HandleCommit) -> GitHubResult<HandleReference, HandleRepositoryError>  {
         let tag = tag.as_ref();
 
-        let reference = HandleReference::try_create(self.clone(), commit, {
+        let reference = HandleReference::try_create(self, commit, {
             format!("tags/{tag}")
         })?;
         
@@ -337,7 +338,7 @@ impl<'a> HandleRepository<'a> {
     pub fn try_create_branch(&self, branch: impl AsRef<str>, commit: HandleCommit) -> GitHubResult<HandleReference, HandleRepositoryError> {
         let branch = branch.as_ref();
 
-        let reference = HandleReference::try_create(self.clone(), commit, {
+        let reference = HandleReference::try_create(self, commit, {
             format!("heads/{branch}")
         })?;
         
@@ -349,7 +350,7 @@ impl<'a> HandleRepository<'a> {
     }
 
     pub fn try_create_reference(&self, reference: impl AsRef<str>, commit: HandleCommit) -> GitHubResult<HandleReference, HandleRepositoryError> {
-        Ok(HandleReference::try_create(self.clone(), commit, reference)?)
+        Ok(HandleReference::try_create(self, commit, reference)?)
     }
 
     pub fn try_delete_tag(&self, tag: HandleReference) -> GitHubResult<(), HandleRepositoryError> {
@@ -372,11 +373,11 @@ impl<'a> HandleRepository<'a> {
         Ok(reference.try_delete()?)
     }
     
-    pub fn try_get_blob(&'a self, sha: impl Into<Sha<'a>>) -> GitHubResult<Blob, HandleRepositoryError> {
+    pub fn try_get_blob(&self, sha: impl Into<Sha<'static>>) -> GitHubResult<Blob, HandleRepositoryError> {
         Ok(Blob::try_fetch(self, sha)?)
     }
 
-    pub fn try_create_binary_blob(&'a self, content: impl AsRef<[u8]>) -> GitHubResult<Blob, HandleRepositoryError> {
+    pub fn try_create_binary_blob(&self, content: impl AsRef<[u8]>) -> GitHubResult<Blob, HandleRepositoryError> {
         Ok(Blob::try_create_binary_blob(self, content)?)
     }
 
@@ -384,7 +385,7 @@ impl<'a> HandleRepository<'a> {
         Ok(Blob::try_create_text_blob(self, content)?)
     }   
 
-    pub fn try_get_tree(&'a self, sha: impl Into<Sha<'a>>, recursive: bool) -> GitHubResult<Tree, HandleRepositoryError> {
+    pub fn try_get_tree(&self, sha: impl Into<Sha<'static>>, recursive: bool) -> GitHubResult<Tree, HandleRepositoryError> {
         Ok(Tree::try_fetch(self, sha, recursive)?)
     }
 
@@ -392,37 +393,37 @@ impl<'a> HandleRepository<'a> {
         Ok(Tree::try_create(self, entries)?)
     }
 
-    pub fn try_create_tree_with_base(&self, base: HandleCommit<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
+    pub fn try_create_tree_with_base(&self, base: HandleCommit, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
         Ok(Tree::try_create_with_base(self, base, entries)?)
     }
 
-    pub fn try_get_commit(&'a self, commit: impl Into<Sha<'a>>) -> GitHubResult<HandleCommit, HandleRepositoryError> {
-        Ok(HandleCommit::try_fetch(self.clone(), commit)?)
+    pub fn try_get_commit(&self, commit: impl Into<Sha<'static>>) -> GitHubResult<HandleCommit, HandleRepositoryError> {
+        Ok(HandleCommit::try_fetch(self, commit)?)
     }
 
-    pub fn try_has_commit(&'a self, commit: impl Into<Sha<'a>>) -> GitHubResult<bool, HandleRepositoryError> {
-        match HandleCommit::try_fetch(self.clone(), commit) {
+    pub fn try_has_commit(&self, commit: impl Into<Sha<'static>>) -> GitHubResult<bool, HandleRepositoryError> {
+        match HandleCommit::try_fetch(self, commit) {
             Err(CommitError::Client(ClientError::Response(ClientResponseError::Nothing { .. }))) => Ok(false),
             Err(error) => Err(error.into()),
             Ok(_) => Ok(true),
         }
     }
 
-    pub fn try_create_commit(&'a self, parents: impl AsRef<[HandleCommit<'a>]>, tree: Tree<'a>, message: impl AsRef<str>) -> GitHubResult<HandleCommit<'a>, HandleRepositoryError> { 
-        Ok(HandleCommit::try_create(self.clone(), parents, tree, message)?) 
+    pub fn try_create_commit(&self, parents: impl AsRef<[HandleCommit]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<HandleCommit, HandleRepositoryError> { 
+        Ok(HandleCommit::try_create(self, parents, tree, message)?) 
     }
 }
 
-impl<'a> GitHubProperties<'a> for HandleRepository<'a> {
+impl<'a> GitHubProperties<'a> for HandleRepository {
     type Content = Repository;
-    type Parent = Account<'a>;
+    type Parent = Account;
 
-    fn get_client(&'a self) -> &'a Client {
+    fn get_client(&self) -> &Client {
         self.get_parent()
             .get_client()
     }
     
-    fn get_parent(&'a self) -> &'a Self::Parent {
+    fn get_parent(&self) -> &Self::Parent {
         &(self.owner)
     }
     
@@ -431,7 +432,7 @@ impl<'a> GitHubProperties<'a> for HandleRepository<'a> {
     }
 }
 
-impl<'a> FmtDisplay for HandleRepository<'a> {
+impl FmtDisplay for HandleRepository {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{owner}/{name}", owner = self.owner, name = self.name)
     }

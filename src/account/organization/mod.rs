@@ -49,12 +49,12 @@ pub enum HandleOrganizationError {
 }
 
 #[derive(Clone, Debug)]
-pub struct HandleOrganization<'a> {
+pub struct HandleOrganization {
     pub(crate) client: Client,
-    pub(crate) name: Cow<'a, str>,
+    pub(crate) name: String,
 }
 
-impl<'a> HandleOrganization<'a> {
+impl HandleOrganization {
     pub fn try_is_verified(&self) -> GitHubResult<bool, HandleOrganizationError> {
         #[derive(Debug)]
         #[derive(Deserialize)] 
@@ -70,20 +70,20 @@ impl<'a> HandleOrganization<'a> {
         Ok(is_verified)
     }
 
-    pub fn try_get_team(&'a self, slug: impl AsRef<str>) -> GitHubResult<HandleTeam<'a>, HandleOrganizationError> {
+    pub fn try_get_team(&self, slug: impl AsRef<str>) -> GitHubResult<HandleTeam, HandleOrganizationError> {
         Ok(HandleTeam::try_fetch(self, slug.as_ref())?)
     }
 
-    pub fn try_get_all_teams(&'a self) -> GitHubResult<Vec<HandleTeam<'a>>, HandleOrganizationError> {
+    pub fn try_get_all_teams(&self) -> GitHubResult<Vec<HandleTeam>, HandleOrganizationError> {
         Ok(HandleTeam::try_fetch_all(self)?)
     }
 
-    pub fn get_actions(&'a self) -> HandleActions<'a> {
+    pub fn get_actions(&self) -> HandleActions {
         HandleActions::from(self)
     }
 }
 
-impl<'a> GitHubProperties<'a> for HandleOrganization<'a> {
+impl<'a> GitHubProperties<'a> for HandleOrganization {
     type Content = User;
     type Parent = Client;
     
@@ -95,12 +95,12 @@ impl<'a> GitHubProperties<'a> for HandleOrganization<'a> {
         &(self.client)
     }
     
-    fn get_endpoint(&self) -> Cow<'a, str> {
+    fn get_endpoint(&'a self) -> Cow<'a, str> {
         format!("orgs/{self}").into()
     }
 }
 
-impl<'a> FmtDisplay for HandleOrganization<'a> {
+impl FmtDisplay for HandleOrganization {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         let HandleOrganization { name, .. } = { self };
         write!(fmt, "{name}")

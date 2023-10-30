@@ -131,12 +131,11 @@ impl TreeEntry {
         TreeEntry::Tree { 
             path: Default::default(), 
             mode: Default::default(), 
-            sha: tree.get_sha()
-                .to_owned(),
+            sha: tree.into(),
         }
     }
 
-    pub fn commit<'a>(sha: Sha<'a>) -> TreeEntry {
+    pub fn commit(sha: Sha) -> TreeEntry {
         TreeEntry::Commit { 
             path: Default::default(), 
             mode: Default::default(), 
@@ -208,13 +207,13 @@ pub enum TreeError {
 }
 
 #[derive(Clone, Debug)]
-pub struct Tree<'a> {
+pub struct Tree {
     pub(crate) tree: Vec<TreeEntry>,
-    pub(crate) sha: Sha<'a>,
+    pub(crate) sha: Sha<'static>,
 }
 
-impl<'a> Tree<'a> {
-    pub(crate) fn try_create(repository: &'a HandleRepository<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, TreeError> {
+impl Tree {
+    pub(crate) fn try_create(repository: &'_ HandleRepository, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, TreeError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -237,7 +236,7 @@ impl<'a> Tree<'a> {
         })
     }
 
-    pub(crate) fn try_create_with_base(repository: &'a HandleRepository<'a>, base: HandleCommit<'a>, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree<'a>, HandleRepositoryError> {
+    pub(crate) fn try_create_with_base(repository: &'_ HandleRepository, base: HandleCommit, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
         let tree = { base.try_get_tree(false)? };
 
         #[derive(Debug)]
@@ -249,9 +248,12 @@ impl<'a> Tree<'a> {
 
         let Capsule { tree, sha } = {
 
+            let base_tree: Sha<'_> = { tree.into() };
+            let tree = { entries.as_ref() };
+
             let ref payload = serde_json::json!({
-                "base_tree": tree.get_sha(),
-                "tree": entries.as_ref(),
+                "base_tree": base_tree,
+                "tree": tree,
             });
             
             repository.get_client()
@@ -268,7 +270,7 @@ impl<'a> Tree<'a> {
         })
     }
 
-    pub(crate) fn try_fetch(repository: &'a HandleRepository<'a>, sha: impl Into<Sha<'a>>, recursive: bool) -> GitHubResult<Tree, TreeError> {
+    pub(crate) fn try_fetch(repository: &HandleRepository, sha: impl Into<Sha<'static>>, recursive: bool) -> GitHubResult<Tree, TreeError> {
         let sha = sha.into();
 
         let ref recursive = if recursive { Vec::from([("recursive", "true")]) } else { 
@@ -294,32 +296,28 @@ impl<'a> Tree<'a> {
             sha,
         })
     }
-
-    pub fn get_sha(&self) -> Sha {
-        self.sha.clone()
-    }
 }
 
-impl<'a> Deref for Tree<'a> {
+impl Deref for Tree {
     type Target = [TreeEntry];
     fn deref(&self) -> &Self::Target {
         self.tree.as_ref()
     }
 }
 
-impl<'a> Into<Sha<'static>> for &'a Tree<'a> {
+impl Into<Sha<'static>> for &Tree {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
     }
 }
 
-impl<'a> Into<Sha<'static>> for Tree<'a> {
+impl Into<Sha<'static>> for Tree {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
     }
 }
 
-impl<'a> FmtDisplay for Tree<'a> {
+impl FmtDisplay for Tree {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{sha}", sha = self.sha)
     }

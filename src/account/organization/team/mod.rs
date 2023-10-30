@@ -48,13 +48,13 @@ pub enum HandleTeamError {
 }
 
 #[derive(Clone, Debug)]
-pub struct HandleTeam<'a> {
-    pub(crate) organization: &'a HandleOrganization<'a>,
+pub struct HandleTeam {
+    pub(crate) organization: HandleOrganization,
     pub(crate) slug: String,
 }
 
-impl<'a> HandleTeam<'a> {
-    pub(crate) fn try_fetch(organization: &'a HandleOrganization, slug: impl AsRef<str>) -> GitHubResult<HandleTeam<'a>, HandleTeamError> {
+impl HandleTeam {
+    pub(crate) fn try_fetch(organization: &HandleOrganization, slug: impl AsRef<str>) -> GitHubResult<HandleTeam, HandleTeamError> {
         let slug = slug.as_ref()
             .to_owned();
 
@@ -65,12 +65,12 @@ impl<'a> HandleTeam<'a> {
         };
 
         Ok(HandleTeam { 
-            organization,
+            organization: organization.clone(),
             slug,
         })
     }
 
-    pub(crate) fn try_fetch_all(organization: &'a HandleOrganization) -> GitHubResult<Vec<HandleTeam<'a>>, HandleTeamError> {
+    pub(crate) fn try_fetch_all(organization: &HandleOrganization) -> GitHubResult<Vec<HandleTeam>, HandleTeamError> {
         let client = organization.get_client();
         
         let mut collection = Vec::new();
@@ -102,7 +102,8 @@ impl<'a> HandleTeam<'a> {
 
         Ok(collection.into_iter()
             .map(|Team { slug, .. }| HandleTeam { 
-                organization, slug 
+                organization: organization.clone(),
+                slug,
             }).collect())
     }
 
@@ -125,16 +126,16 @@ impl<'a> HandleTeam<'a> {
     }
 }
 
-impl<'a> GitHubProperties<'a> for HandleTeam<'a> {
+impl<'a> GitHubProperties<'a> for HandleTeam {
     type Content = Team;
-    type Parent = HandleOrganization<'a>;
+    type Parent = HandleOrganization;
     
-    fn get_client(&self) -> &'a Client {
+    fn get_client(&'a self) -> &'a Client {
         self.organization.get_client()
     }
     
-    fn get_parent(&self) -> &'a Self::Parent {
-        self.organization
+    fn get_parent(&'a self) -> &'a Self::Parent {
+        &(self.organization)
     }
     
     fn get_endpoint(&self) -> Cow<'a, str> {
@@ -143,7 +144,7 @@ impl<'a> GitHubProperties<'a> for HandleTeam<'a> {
     }
 }
 
-impl<'a> FmtDisplay for HandleTeam<'a> {
+impl FmtDisplay for HandleTeam {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         let HandleTeam { slug, .. } = { self };
         write!(fmt, "{slug}")

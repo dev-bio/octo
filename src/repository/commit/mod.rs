@@ -67,14 +67,14 @@ pub enum CommitError {
 }
 
 #[derive(Clone, Debug)]
-pub struct HandleCommit<'a> {
-    pub(crate) repository: HandleRepository<'a>,
+pub struct HandleCommit {
+    pub(crate) repository: HandleRepository,
     pub(crate) date: Date,
-    pub(crate) sha: Sha<'a>,
+    pub(crate) sha: Sha<'static>,
 }
 
-impl<'a> HandleCommit<'a> {
-    pub(crate) fn try_fetch(repository: HandleRepository<'a>, commit: impl Into<Sha<'a>>) -> GitHubResult<HandleCommit<'a>, CommitError> {
+impl HandleCommit {
+    pub(crate) fn try_fetch(repository: &HandleRepository, commit: impl Into<Sha<'static>>) -> GitHubResult<HandleCommit, CommitError> {
         let commit = commit.into()
             .to_owned();
 
@@ -111,13 +111,14 @@ impl<'a> HandleCommit<'a> {
         };
 
         Ok(HandleCommit {
-            repository,
+            repository: repository.clone(),
             date,
             sha,
         })
     }
 
-    pub(crate) fn try_create(repository: HandleRepository<'a>, parents: impl AsRef<[HandleCommit<'a>]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<HandleCommit<'a>, CommitError> {
+    pub(crate) fn try_create(repository: &'_ HandleRepository, parents: impl AsRef<[HandleCommit]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<HandleCommit, CommitError> {
+
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct CapsuleAuthor {
@@ -140,10 +141,12 @@ impl<'a> HandleCommit<'a> {
                 .map(|commit| commit.get_sha())
                 .collect();
 
+            let tree: Sha<'_> = { tree.into() };
+
             let ref payload = serde_json::json!({
                 "parents": parents.as_slice(),
                 "message": message.to_owned(),
-                "tree": tree.get_sha(),
+                "tree": tree,
             });
             
             repository.get_client()
@@ -154,17 +157,18 @@ impl<'a> HandleCommit<'a> {
         };
 
         Ok(HandleCommit {
-            repository,
+            repository: repository.clone(),
             date,
             sha,
         })
     }
 
-    pub fn try_compare(&self, head: HandleCommit<'a>) -> GitHubResult<Compare, CommitError> {
-        Ok(Compare::try_from_base_head(self.repository.clone(), self.clone(), head)?)
+    pub fn try_compare(&self, head: HandleCommit) -> GitHubResult<Compare, CommitError>  {
+        Ok(Compare::try_from_base_head(self.get_parent(), self.clone(), head)?)
     }
 
     pub fn try_get_parents(&self) -> GitHubResult<Vec<HandleCommit>, CommitError> {
+
         let Self { repository, .. } = { self };
 
         #[derive(Debug)]
@@ -189,7 +193,7 @@ impl<'a> HandleCommit<'a> {
 
         let mut collection = Vec::new();
         for CapsuleParents { sha } in parents.iter() {
-            collection.push(HandleCommit::try_fetch(repository.clone(), {
+            collection.push(HandleCommit::try_fetch(repository, {
                 sha.clone()
             })?);
         }
@@ -224,7 +228,7 @@ impl<'a> HandleCommit<'a> {
         Ok(Tree::try_fetch(repository, sha, recursive)?)
     }
 
-    pub fn try_get_date(&'a self) -> GitHubResult<Date, CommitError> {
+    pub fn try_get_date(&self) -> GitHubResult<Date, CommitError> {
         let repository = self.get_parent();
 
         let response = {
@@ -277,9 +281,9 @@ impl<'a> HandleCommit<'a> {
     }
 }
 
-impl<'a> GitHubProperties<'a> for HandleCommit<'a> {
+impl<'a> GitHubProperties<'a> for HandleCommit {
     type Content = Commit;
-    type Parent = HandleRepository<'a>;
+    type Parent = HandleRepository;
     
     fn get_client(&'a self) -> &'a Client {
         self.get_parent()
@@ -296,19 +300,19 @@ impl<'a> GitHubProperties<'a> for HandleCommit<'a> {
     }
 }
 
-impl<'a> Into<Sha<'static>> for &'a HandleCommit<'a> {
+impl<'a, 'b> Into<Sha<'static>> for &'a HandleCommit {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
     }
 }
 
-impl<'a> Into<Sha<'static>> for HandleCommit<'a> {
+impl<'a, 'b> Into<Sha<'static>> for HandleCommit {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
     }
 }
 
-impl<'a> FmtDisplay for HandleCommit<'a> {
+impl FmtDisplay for HandleCommit {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{sha}", sha = self.sha)
     }

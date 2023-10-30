@@ -20,8 +20,9 @@ use crate::{
     repository::{
 
         commit::{HandleCommit},
+        sha::{Sha},
 
-        HandleRepository,
+        HandleRepository, 
     },
 
     client::{ClientError},
@@ -38,43 +39,43 @@ pub enum CompareFile {
     Added {
         #[serde(rename = "filename")]
         path: PathBuf,
-        sha: String,
+        sha: Sha<'static>,
     },
     #[serde(rename = "removed")]
     Removed {
         #[serde(rename = "filename")]
         path: PathBuf,
-        sha: String,
+        sha: Sha<'static>,
     },
     #[serde(rename = "modified")]
     Modified {
         #[serde(rename = "filename")]
         path: PathBuf,
-        sha: String,
+        sha: Sha<'static>,
     },
     #[serde(rename = "renamed")]
     Renamed {
         #[serde(rename = "filename")]
         path: PathBuf,
-        sha: String,
+        sha: Sha<'static>,
     },
     #[serde(rename = "copied")]
     Copied {
         #[serde(rename = "filename")]
         path: PathBuf,
-        sha: String,
+        sha: Sha<'static>,
     },
     #[serde(rename = "changed")]
     Changed {
         #[serde(rename = "filename")]
         path: PathBuf,
-        sha: String,
+        sha: Sha<'static>,
     },
     #[serde(rename = "unchanged")]
     Unchanged {
         #[serde(rename = "filename")]
         path: PathBuf,
-        sha: String,
+        sha: Sha<'static>,
     },
 }
 
@@ -85,14 +86,14 @@ pub enum CompareError {
 }
 
 #[derive(Clone, Debug)]
-pub struct Compare<'a> {
+pub struct Compare {
     files: Vec<CompareFile>,
-    base: HandleCommit<'a>,
-    head: HandleCommit<'a>,
+    base: HandleCommit,
+    head: HandleCommit,
 }
 
-impl<'a> Compare<'a> {
-    pub fn try_from_base_head(repository: HandleRepository<'a>, base: HandleCommit<'a>, head: HandleCommit<'a>) -> GitHubResult<Compare<'a>, CompareError> {
+impl Compare {
+    pub fn try_from_base_head(repository: &HandleRepository, base: HandleCommit, head: HandleCommit) -> GitHubResult<Compare, CompareError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -120,16 +121,16 @@ impl<'a> Compare<'a> {
         self.files.as_ref()
     }
 
-    pub fn get_base(&self) -> HandleCommit<'a> {
+    pub fn get_base(&self) -> HandleCommit {
         self.base.clone()
     }
 
-    pub fn get_head(&self) -> HandleCommit<'a>{
+    pub fn get_head(&self) -> HandleCommit{
         self.head.clone()
     }
 }
 
-impl<'a> Deref for Compare<'a> {
+impl Deref for Compare {
     type Target = [CompareFile];
 
     fn deref(&self) -> &Self::Target {
@@ -137,7 +138,7 @@ impl<'a> Deref for Compare<'a> {
     }
 }
 
-impl<'a> FmtDisplay for Compare<'a> {
+impl FmtDisplay for Compare {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{base}..{head}", base = self.base, head = self.head)
     }

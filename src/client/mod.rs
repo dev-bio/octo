@@ -4,7 +4,7 @@ use std::{
         
         Display as FmtDisplay,
         Debug as FmtDebug,
-    }, borrow::Cow, 
+    }, 
 };
 
 use backoff::{
@@ -188,16 +188,16 @@ impl Client {
         }
     }
 
-    pub fn try_get_account<'a>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<Account<'a>, GitHubError> {
-        let name = name.into();
+    pub fn try_get_account(&self, name: impl AsRef<str>) -> GitHubResult<Account, GitHubError> {
+        let name = name.as_ref();
 
-        Ok(Account::try_from_name(self.clone(), name.split_once('/')
-            .map(|(owner, _)| Cow::Owned(owner.to_owned()))
+        Ok(Account::try_from_name(self, name.split_once('/')
+            .map(|(owner, _)| owner)
             .unwrap_or(name))?)
     }
 
-    pub fn try_get_organization<'a>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleOrganization<'a>, GitHubError> {
-        let name = name.into();
+    pub fn try_get_organization(&self, name: impl AsRef<str>) -> GitHubResult<HandleOrganization, GitHubError> {
+        let name = name.as_ref();
 
         let owner = self.try_get_account(name)?;
         if let Account::Organization(organization) = owner { Ok(organization) } else {
@@ -209,8 +209,8 @@ impl Client {
         }
     }
 
-    pub fn try_get_user<'a>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleUser<'a>, GitHubError> {
-        let name = name.into();
+    pub fn try_get_user(&self, name: impl AsRef<str>) -> GitHubResult<HandleUser, GitHubError> {
+        let name = name.as_ref();
 
         let owner = self.try_get_account(name)?;
         if let Account::User(user) = owner { Ok(user) } else {
@@ -222,19 +222,15 @@ impl Client {
         }
     }
 
-    pub fn try_get_repository<'a, 'b>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<HandleRepository<'b>, GitHubError> 
-    where 'a: 'b {
+    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<HandleRepository, GitHubError> {
+        let name = name.as_ref();
 
-        let name = name.into();
-        
         Ok(self.try_get_account(name.clone())?
             .try_get_repository(name.clone())?)
     }
 
-    pub fn try_get_all_repositories<'a, 'b>(&self, name: impl Into<Cow<'a, str>>) -> GitHubResult<Vec<HandleRepository<'b>>, GitHubError> 
-    where 'a: 'b {
-
-        let name = name.into();
+    pub fn try_get_all_repositories(&self, name: impl AsRef<str>) -> GitHubResult<Vec<HandleRepository>, GitHubError> {
+        let name = name.as_ref();
 
         Ok(self.try_get_account(name.clone())?
             .try_get_all_repositories()?)

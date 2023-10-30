@@ -41,12 +41,12 @@ pub enum HandleUserError {
 }
 
 #[derive(Clone, Debug)]
-pub struct HandleUser<'a> {
+pub struct HandleUser {
     pub(crate) client: Client,
-    pub(crate) name: Cow<'a, str>,
+    pub(crate) name: String,
 }
 
-impl<'a> GitHubProperties<'a> for HandleUser<'a> {
+impl<'a> GitHubProperties<'a> for HandleUser {
     type Content = User;
     type Parent = Client;
 
@@ -63,7 +63,7 @@ impl<'a> GitHubProperties<'a> for HandleUser<'a> {
     }
 }
 
-impl<'a> FmtDisplay for HandleUser<'a> {
+impl FmtDisplay for HandleUser {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         let HandleUser { name, .. } = { self };
         write!(fmt, "{name}")

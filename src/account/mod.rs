@@ -1,6 +1,4 @@
 use std::{
-    
-    borrow::{Cow}, 
 
     fmt::{
 
@@ -76,30 +74,30 @@ pub enum AccountError {
 }
 
 #[derive(Clone, Debug)]
-pub enum Account<'a> {
-    Organization(HandleOrganization<'a>),
-    User(HandleUser<'a>),
+pub enum Account {
+    Organization(HandleOrganization),
+    User(HandleUser),
 }
 
-impl<'a> Account<'a> {
-    pub(crate) fn try_from_name(client: Client, name: impl Into<Cow<'a, str>>) -> GitHubResult<Account<'a>, AccountError> {
-        let name = name.into();
+impl Account {
+    pub(crate) fn try_from_name(client: &Client, name: impl AsRef<str>) -> GitHubResult<Account, AccountError> {
+        let name = name.as_ref();
 
         let account = client.get(format!("users/{name}"))?
             .send()?.json()?;
 
         match account {
             User::Organization { .. } => Ok(Account::Organization({
-                HandleOrganization { client, name }
+                HandleOrganization { client: client.clone(), name: name.to_owned() }
             })),
             User::User { .. } => Ok(Account::User({
-                HandleUser { client, name }
+                HandleUser { client: client.clone(), name: name.to_owned() }
             })),
             _ => Err(AccountError::Unsupported { account }),
         }
     }
 
-    pub(crate) fn get_client(&'a self) -> &'a Client {
+    pub(crate) fn get_client<'a>(&'a self) -> &'a Client {
         match self {
             Account::Organization(organization) => organization.get_client(),
             Account::User(user) => user.get_client(),
@@ -129,26 +127,24 @@ impl<'a> Account<'a> {
         Ok(())
     }
 
-    pub fn try_get_repository<'b>(&'_ self, name: impl Into<Cow<'b, str>>) -> GitHubResult<HandleRepository<'b>, AccountError>
-    where 'a: 'b { Ok(HandleRepository::try_fetch(self.clone(), name)?) }
+    pub fn try_get_repository(&self, name: impl AsRef<str>) -> GitHubResult<HandleRepository, AccountError> { Ok(HandleRepository::try_fetch(self, name)?) }
 
-    pub fn try_get_all_repositories<'b>(&'_ self) -> GitHubResult<Vec<HandleRepository<'b>>, AccountError>
-    where 'a: 'b { Ok(HandleRepository::try_fetch_all(self.clone())?) }
+    pub fn try_get_all_repositories(&self) -> GitHubResult<Vec<HandleRepository>, AccountError> { Ok(HandleRepository::try_fetch_all(self)?) }
 }
 
-impl<'a> From<HandleOrganization<'a>> for Account<'a> {
-    fn from(organization: HandleOrganization<'a>) -> Account<'a> {
+impl From<HandleOrganization> for Account {
+    fn from(organization: HandleOrganization) -> Account {
         Account::Organization(organization.into())
     }
 }
 
-impl<'a> From<HandleUser<'a>> for Account<'a> {
-    fn from(user: HandleUser<'a>) -> Account<'a> {
+impl From<HandleUser> for Account {
+    fn from(user: HandleUser) -> Account {
         Account::User(user.into())
     }
 }
 
-impl<'a> FmtDisplay for Account<'a> {
+impl FmtDisplay for Account {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         match self {
             Account::Organization(organization) => write!(fmt, "{organization}"),

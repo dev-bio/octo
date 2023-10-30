@@ -51,14 +51,14 @@ pub enum ReferenceError {
 }
 
 #[derive(Clone, Debug)]
-pub enum HandleReference<'a> {
-    PullRequest { repository: HandleRepository<'a>, branch: String, issue: Number },
-    Branch { repository: HandleRepository<'a>, branch: String },
-    Tag { repository: HandleRepository<'a>, tag: String },
+pub enum HandleReference {
+    PullRequest { repository: HandleRepository, branch: String, issue: Number },
+    Branch { repository: HandleRepository, branch: String },
+    Tag { repository: HandleRepository, tag: String },
 }
 
-impl<'a> HandleReference<'a> {
-    pub(crate) fn try_parse(repository: HandleRepository<'a>, reference: impl AsRef<str>) -> GitHubResult<HandleReference<'a>, ReferenceError> {
+impl HandleReference {
+    pub(crate) fn try_parse(repository: &'_ HandleRepository, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
         let reference = reference.as_ref();
 
         let tokens: Vec<_> = reference.split('/')
@@ -67,31 +67,31 @@ impl<'a> HandleReference<'a> {
         let kind = match tokens.as_slice() {
             ["refs", "pull", issue, branch] |
             ["pull", issue, branch] => HandleReference::PullRequest {
-                repository, branch: branch.to_string(), issue: issue.parse().map_err(|_| {
+                repository: repository.clone(), branch: branch.to_string(), issue: issue.parse().map_err(|_| {
                     ReferenceError::Invalid { reference: reference.to_owned() }
                 })?,
             },
             ["refs", "pull", issue, branch @ ..] |
             ["pull", issue, branch @ ..] => HandleReference::PullRequest {
-                repository, branch: branch.join("/"), issue: issue.parse().map_err(|_| {
+                repository: repository.clone(), branch: branch.join("/"), issue: issue.parse().map_err(|_| {
                     ReferenceError::Invalid { reference: reference.to_owned() }
                 })?,
             },
             ["refs", "heads", branch] |
             ["heads", branch] => HandleReference::Branch {
-                repository, branch: branch.to_string(),
+                repository: repository.clone(), branch: branch.to_string(),
             },
             ["refs", "heads", branch @ ..] |
             ["heads", branch @ ..] => HandleReference::Branch {
-                repository, branch: branch.join("/"),
+                repository: repository.clone(), branch: branch.join("/"),
             },
             ["refs", "tags", tag] |
             ["tags", tag] => HandleReference::Tag {
-                repository, tag: tag.to_string(),
+                repository: repository.clone(), tag: tag.to_string(),
             },
             ["refs", "tags", tag @ ..] |
             ["tags", tag @ ..] => HandleReference::Tag {
-                repository, tag: tag.join("/"),
+                repository: repository.clone(), tag: tag.join("/"),
             },
             _ => return Err(ReferenceError::Invalid {
                 reference: reference.to_owned()
@@ -101,10 +101,10 @@ impl<'a> HandleReference<'a> {
         Ok(kind)
     }
 
-    pub(crate) fn try_fetch(repository: HandleRepository<'a>, reference: impl AsRef<str>)  -> GitHubResult<HandleReference<'a>, ReferenceError> {
+    pub(crate) fn try_fetch(repository: &'_ HandleRepository, reference: impl AsRef<str>)  -> GitHubResult<HandleReference, ReferenceError> {
         let reference = reference.as_ref();
 
-        let parsed = Self::try_parse(repository.clone(), {
+        let parsed = Self::try_parse(repository, {
             reference
         })?;
 
@@ -142,9 +142,9 @@ impl<'a> HandleReference<'a> {
         }
     }
 
-    pub(crate) fn try_create(repository: HandleRepository<'a>, commit: HandleCommit, reference: impl AsRef<str>) -> GitHubResult<HandleReference<'a>, ReferenceError> {
+    pub(crate) fn try_create(repository: &'_ HandleRepository, commit: HandleCommit, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
         let reference = reference.as_ref();
-        let parsed = Self::try_parse(repository.clone(), {
+        let parsed = Self::try_parse(repository, {
             reference
         })?;
         
@@ -204,7 +204,7 @@ impl<'a> HandleReference<'a> {
         Ok(())
     }
 
-    pub fn try_get_commit<'n>(&'a self) -> GitHubResult<HandleCommit<'a>, HandleRepositoryError> {
+    pub fn try_get_commit(&self) -> GitHubResult<HandleCommit, HandleRepositoryError> {
         let repository = self.get_repository();
         let client = self.get_client();
 
@@ -268,7 +268,7 @@ impl<'a> HandleReference<'a> {
         Ok(())
     }
 
-    pub(crate) fn get_client(&'a self) -> &'a Client {
+    pub(crate) fn get_client(&self) -> &Client {
         match self {
             HandleReference::PullRequest { repository, .. } => repository.get_client(),
             HandleReference::Branch { repository, .. } => repository.get_client(),
@@ -276,11 +276,11 @@ impl<'a> HandleReference<'a> {
         }
     }
 
-    pub fn get_repository(&'a self) -> &'a HandleRepository<'a> {
+    pub fn get_repository(&self) -> HandleRepository {
         match self {
-            HandleReference::PullRequest { repository, .. } => repository,
-            HandleReference::Branch { repository, .. } => repository,
-            HandleReference::Tag { repository, .. } => repository,
+            HandleReference::PullRequest { repository, .. } => repository.clone(),
+            HandleReference::Branch { repository, .. } => repository.clone(),
+            HandleReference::Tag { repository, .. } => repository.clone(),
         }
     }
 
@@ -306,7 +306,7 @@ impl<'a> HandleReference<'a> {
     }
 }
 
-impl<'a> FmtDisplay for HandleReference<'a> {
+impl FmtDisplay for HandleReference {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         match self {
             HandleReference::PullRequest { branch, issue, .. } => write!(fmt, "pull/{issue}/{branch}"),

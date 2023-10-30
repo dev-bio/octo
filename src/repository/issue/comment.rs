@@ -41,16 +41,17 @@ pub enum IssueCommentError {
 }
 
 #[derive(Clone, Debug)]
-pub struct HandleIssueComment<'a> {
-    issue: HandleIssue<'a>,
+pub struct HandleIssueComment {
+    issue: HandleIssue,
     number: Number,
 }
 
-impl<'a> HandleIssueComment<'a> {
-    pub(crate) fn try_fetch(issue: HandleIssue<'a>, number: Number) -> GitHubResult<HandleIssueComment, IssueCommentError> {
+impl HandleIssueComment {
+    pub(crate) fn try_fetch(issue: &HandleIssue, number: impl Into<Number>) -> GitHubResult<HandleIssueComment, IssueCommentError> {
         let Comment { number, .. } = {
 
             let repository = issue.get_parent();
+            let number = number.into();
             
             let result = {
 
@@ -69,11 +70,12 @@ impl<'a> HandleIssueComment<'a> {
         };
 
         Ok(HandleIssueComment {
-            issue, number
+            issue: issue.clone(),
+            number,
         })
     }
 
-    pub(crate) fn try_fetch_all(issue: HandleIssue<'a>) -> GitHubResult<Vec<HandleIssueComment>, IssueCommentError> {
+    pub(crate) fn try_fetch_all(issue: &HandleIssue) -> GitHubResult<Vec<HandleIssueComment>, IssueCommentError> {
         let repository = issue.get_parent();
 
         let mut collection = Vec::new();
@@ -123,7 +125,7 @@ impl<'a> HandleIssueComment<'a> {
         Ok(issues)
     }
 
-    pub fn try_create(issue: HandleIssue<'a>, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment, IssueCommentError> {
+    pub(crate) fn try_create(issue: &HandleIssue, content: impl AsRef<str>) -> GitHubResult<HandleIssueComment, IssueCommentError> {
         let repository = issue.get_parent();
 
         let ref payload = serde_json::json!({
@@ -141,12 +143,14 @@ impl<'a> HandleIssueComment<'a> {
         };
 
         Ok(HandleIssueComment {
-            issue, number
+            issue: issue.clone(),
+            number,
         })
     }
 
-    pub fn try_delete(issue: HandleIssue<'a>, number: usize) -> GitHubResult<(), IssueCommentError> {
+    pub(crate) fn try_delete(issue: &HandleIssue, number: impl Into<Number>) -> GitHubResult<(), IssueCommentError> {
         let repository = issue.get_parent();
+        let number = number.into();
         
         let _ = {
 
@@ -159,9 +163,9 @@ impl<'a> HandleIssueComment<'a> {
     }
 }
 
-impl<'a> GitHubProperties<'a> for HandleIssueComment<'a> {
+impl<'a> GitHubProperties<'a> for HandleIssueComment {
     type Content = Comment;
-    type Parent = HandleIssue<'a>;
+    type Parent = HandleIssue;
     
     fn get_client(&'a self) -> &'a Client {
         self.get_parent()
@@ -179,19 +183,19 @@ impl<'a> GitHubProperties<'a> for HandleIssueComment<'a> {
     }
 }
 
-impl<'a> Into<Number> for &'a HandleIssueComment<'a> {
+impl Into<Number> for &HandleIssueComment {
     fn into(self) -> Number {
         self.number.clone()
     }
 }
 
-impl<'a> Into<Number> for HandleIssueComment<'a> {
+impl Into<Number> for HandleIssueComment {
     fn into(self) -> Number {
         self.number.clone()
     }
 }
 
-impl<'a> FmtDisplay for HandleIssueComment<'a> {
+impl FmtDisplay for HandleIssueComment {
     fn fmt(&self, fmt: &mut FmtFormatter<'_>) -> FmtResult {
         write!(fmt, "{number}", number = {
             self.number.clone()
