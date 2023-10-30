@@ -418,16 +418,16 @@ impl<'a> GitHubProperties<'a> for HandleRepository {
     type Content = Repository;
     type Parent = Account;
 
-    fn get_client(&self) -> &Client {
+    fn get_client(&'a self) -> &'a Client {
         self.get_parent()
             .get_client()
     }
     
-    fn get_parent(&self) -> &Self::Parent {
+    fn get_parent(&'a self) -> &'a Self::Parent {
         &(self.owner)
     }
     
-    fn get_endpoint(&self) -> Cow<'a, str> {
+    fn get_endpoint(&'a self) -> Cow<'a, str> {
         format!("repos/{self}").into()
     }
 }
