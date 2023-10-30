@@ -69,7 +69,7 @@ where Self: Sized + Clone {
         Ok(result)
     }
 
-    fn try_set_properties<T>(&'a self, ref payload: T) -> GitHubResult<Self, HandleRepositoryError>
+    fn try_set_properties<T>(&'a self, ref payload: T) -> GitHubResult<&'a Self, HandleRepositoryError>
     where T: Serialize + FmtDebug {
         let _ = {
 
@@ -79,6 +79,6 @@ where Self: Sized + Clone {
                 .send()?
         };
 
-        Ok(self.clone())
+        Ok(self)
     }
 }
