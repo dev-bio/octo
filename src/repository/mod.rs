@@ -127,7 +127,7 @@ impl HandleRepository {
         })
     }
 
-    pub(crate) fn try_fetch_all(owner: &'_ Account) -> GitHubResult<Vec<HandleRepository>, HandleRepositoryError> {
+    pub(crate) fn try_fetch_all(owner: &Account) -> GitHubResult<Vec<HandleRepository>, HandleRepositoryError> {
         #[derive(Clone, Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -373,7 +373,7 @@ impl HandleRepository {
         Ok(reference.try_delete()?)
     }
     
-    pub fn try_get_blob(&self, sha: impl Into<Sha<'static>>) -> GitHubResult<Blob, HandleRepositoryError> {
+    pub fn try_get_blob<'a>(&self, sha: impl Into<Sha<'a>>) -> GitHubResult<Blob, HandleRepositoryError> {
         Ok(Blob::try_fetch(self, sha)?)
     }
 
@@ -385,7 +385,7 @@ impl HandleRepository {
         Ok(Blob::try_create_text_blob(self, content)?)
     }   
 
-    pub fn try_get_tree(&self, sha: impl Into<Sha<'static>>, recursive: bool) -> GitHubResult<Tree, HandleRepositoryError> {
+    pub fn try_get_tree<'a>(&self, sha: impl Into<Sha<'a>>, recursive: bool) -> GitHubResult<Tree, HandleRepositoryError> {
         Ok(Tree::try_fetch(self, sha, recursive)?)
     }
 
@@ -397,11 +397,11 @@ impl HandleRepository {
         Ok(Tree::try_create_with_base(self, base, entries)?)
     }
 
-    pub fn try_get_commit(&self, commit: impl Into<Sha<'static>>) -> GitHubResult<HandleCommit, HandleRepositoryError> {
+    pub fn try_get_commit<'a>(&self, commit: impl Into<Sha<'a>>) -> GitHubResult<HandleCommit, HandleRepositoryError> {
         Ok(HandleCommit::try_fetch(self, commit)?)
     }
 
-    pub fn try_has_commit(&self, commit: impl Into<Sha<'static>>) -> GitHubResult<bool, HandleRepositoryError> {
+    pub fn try_has_commit<'a>(&self, commit: impl Into<Sha<'a>>) -> GitHubResult<bool, HandleRepositoryError> {
         match HandleCommit::try_fetch(self, commit) {
             Err(CommitError::Client(ClientError::Response(ClientResponseError::Nothing { .. }))) => Ok(false),
             Err(error) => Err(error.into()),

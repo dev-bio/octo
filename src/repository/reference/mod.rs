@@ -58,7 +58,7 @@ pub enum HandleReference {
 }
 
 impl HandleReference {
-    pub(crate) fn try_parse(repository: &'_ HandleRepository, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
+    pub(crate) fn try_parse(repository: &HandleRepository, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
         let reference = reference.as_ref();
 
         let tokens: Vec<_> = reference.split('/')
@@ -101,7 +101,7 @@ impl HandleReference {
         Ok(kind)
     }
 
-    pub(crate) fn try_fetch(repository: &'_ HandleRepository, reference: impl AsRef<str>)  -> GitHubResult<HandleReference, ReferenceError> {
+    pub(crate) fn try_fetch(repository: &HandleRepository, reference: impl AsRef<str>)  -> GitHubResult<HandleReference, ReferenceError> {
         let reference = reference.as_ref();
 
         let parsed = Self::try_parse(repository, {
@@ -142,7 +142,7 @@ impl HandleReference {
         }
     }
 
-    pub(crate) fn try_create(repository: &'_ HandleRepository, commit: HandleCommit, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
+    pub(crate) fn try_create(repository: &HandleRepository, commit: HandleCommit, reference: impl AsRef<str>) -> GitHubResult<HandleReference, ReferenceError> {
         let reference = reference.as_ref();
         let parsed = Self::try_parse(repository, {
             reference
@@ -188,7 +188,7 @@ impl HandleReference {
         }
     }
 
-    pub fn try_set_commit(&self, force: bool, commit: impl Into<Sha<'static>>) -> GitHubResult<(), HandleRepositoryError> {
+    pub fn try_set_commit<'a>(&self, force: bool, commit: impl Into<Sha<'a>>) -> GitHubResult<(), HandleRepositoryError> {
         let repository = self.get_repository();
 
         let ref payload = serde_json::json!({

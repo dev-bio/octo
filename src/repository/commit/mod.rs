@@ -74,7 +74,7 @@ pub struct HandleCommit {
 }
 
 impl HandleCommit {
-    pub(crate) fn try_fetch(repository: &HandleRepository, commit: impl Into<Sha<'static>>) -> GitHubResult<HandleCommit, CommitError> {
+    pub(crate) fn try_fetch<'a>(repository: &HandleRepository, commit: impl Into<Sha<'a>>) -> GitHubResult<HandleCommit, CommitError> {
         let commit = commit.into()
             .to_owned();
 
@@ -117,7 +117,7 @@ impl HandleCommit {
         })
     }
 
-    pub(crate) fn try_create(repository: &'_ HandleRepository, parents: impl AsRef<[HandleCommit]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<HandleCommit, CommitError> {
+    pub(crate) fn try_create(repository: &HandleRepository, parents: impl AsRef<[HandleCommit]>, tree: Tree, message: impl AsRef<str>) -> GitHubResult<HandleCommit, CommitError> {
 
         #[derive(Debug)]
         #[derive(Deserialize)]
@@ -300,13 +300,13 @@ impl<'a> GitHubProperties<'a> for HandleCommit {
     }
 }
 
-impl<'a, 'b> Into<Sha<'static>> for &'a HandleCommit {
+impl Into<Sha<'static>> for &HandleCommit {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
     }
 }
 
-impl<'a, 'b> Into<Sha<'static>> for HandleCommit {
+impl Into<Sha<'static>> for HandleCommit {
     fn into(self) -> Sha<'static> {
         self.sha.to_owned()
     }

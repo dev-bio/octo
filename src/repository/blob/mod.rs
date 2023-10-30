@@ -60,7 +60,7 @@ pub enum Blob {
 }
 
 impl Blob {
-    pub fn try_fetch(repository: &HandleRepository, sha: impl Into<Sha<'static>>) -> GitHubResult<Blob, BlobError> {
+    pub fn try_fetch<'a>(repository: &HandleRepository, sha: impl Into<Sha<'a>>) -> GitHubResult<Blob, BlobError> {
         let blob = {
             
             let sha: Sha = { sha.into() };
@@ -74,7 +74,7 @@ impl Blob {
         Ok(blob)
     }
 
-    pub fn try_create_text_blob(repository: &'_ HandleRepository, text: impl AsRef<str>) -> GitHubResult<Blob, BlobError> {
+    pub fn try_create_text_blob(repository: &HandleRepository, text: impl AsRef<str>) -> GitHubResult<Blob, BlobError> {
         let text = text.as_ref();
 
         let ref blob = serde_json::json!({
@@ -100,7 +100,7 @@ impl Blob {
         Ok(Blob::Text { content: text.to_owned(), sha })
     }
 
-    pub fn try_create_binary_blob(repository: &'_ HandleRepository, binary: impl AsRef<[u8]>) -> GitHubResult<Blob, BlobError> {
+    pub fn try_create_binary_blob(repository: &HandleRepository, binary: impl AsRef<[u8]>) -> GitHubResult<Blob, BlobError> {
         let binary = binary.as_ref();
         
         #[derive(Debug)]

@@ -213,7 +213,7 @@ pub struct Tree {
 }
 
 impl Tree {
-    pub(crate) fn try_create(repository: &'_ HandleRepository, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, TreeError> {
+    pub(crate) fn try_create(repository: &HandleRepository, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, TreeError> {
         #[derive(Debug)]
         #[derive(Deserialize)]
         struct Capsule {
@@ -236,7 +236,7 @@ impl Tree {
         })
     }
 
-    pub(crate) fn try_create_with_base(repository: &'_ HandleRepository, base: HandleCommit, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
+    pub(crate) fn try_create_with_base(repository: &HandleRepository, base: HandleCommit, entries: impl AsRef<[TreeEntry]>) -> GitHubResult<Tree, HandleRepositoryError> {
         let tree = { base.try_get_tree(false)? };
 
         #[derive(Debug)]
@@ -270,7 +270,7 @@ impl Tree {
         })
     }
 
-    pub(crate) fn try_fetch(repository: &HandleRepository, sha: impl Into<Sha<'static>>, recursive: bool) -> GitHubResult<Tree, TreeError> {
+    pub(crate) fn try_fetch<'a>(repository: &HandleRepository, sha: impl Into<Sha<'a>>, recursive: bool) -> GitHubResult<Tree, TreeError> {
         let sha = sha.into();
 
         let ref recursive = if recursive { Vec::from([("recursive", "true")]) } else { 

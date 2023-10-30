@@ -31,7 +31,7 @@ impl<'h> Sha<'h> {
 }
 
 impl<'h> AsRef<str> for Sha<'h> {
-    fn as_ref(&self) -> &'_ str {
+    fn as_ref(&self) -> &str {
         let Sha(value) = { self };
         value.as_ref()
     }
