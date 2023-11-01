@@ -99,6 +99,8 @@ pub enum HandleRepositoryError {
     DefaultBranch { name: String },
     #[error("Extraction error!")]
     Archive(#[from] ZipError),
+    #[error("Repository not found: '{name}'")]
+    Nothing { name: String },
 }
 
 #[derive(Clone, Debug)]
@@ -114,12 +116,25 @@ impl HandleRepository {
         let components: Vec<_> = name.split('/')
             .collect();
 
-        let _ = match components.as_slice() {
-            [_, name, _, ..] => owner.get_client().get(format!("repos/{owner}/{name}"))?.send()?,
-            [_, name, ..] => owner.get_client().get(format!("repos/{owner}/{name}"))?.send()?,
-            [name, ..] => owner.get_client().get(format!("repos/{owner}/{name}"))?.send()?,
-            _ => owner.get_client().get(format!("repos/{owner}/{name}"))?.send()?,
+        let name = match components.as_slice() {
+            [_, name, _, ..] => name,
+            [_, name, ..] => name,
+            [name, ..] => name,
+            _ => "",
         };
+        
+        let response = {
+
+            owner.get_client()
+                .get(format!("repos/{owner}/{name}"))?
+                .send()?
+        };
+
+        if !(response.is_success()) {
+            return Err(HandleRepositoryError::Nothing { 
+                name: name.to_owned() 
+            })
+        }
 
         Ok(HandleRepository {
             owner: owner.clone(),
