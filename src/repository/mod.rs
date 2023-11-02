@@ -120,7 +120,9 @@ impl HandleRepository {
             [_, name, _, ..] => name,
             [_, name, ..] => name,
             [name, ..] => name,
-            _ => "",
+            _ => return Err(HandleRepositoryError::Nothing { 
+                name: Default::default()
+            }),
         };
         
         let response = {
@@ -132,13 +134,13 @@ impl HandleRepository {
 
         if !(response.is_success()) {
             return Err(HandleRepositoryError::Nothing { 
-                name: name.to_owned() 
+                name: name.to_string() 
             })
         }
 
         Ok(HandleRepository {
             owner: owner.clone(),
-            name: name.to_owned(),
+            name: name.to_lowercase(),
         })
     }
 
@@ -177,7 +179,7 @@ impl HandleRepository {
         }
 
         Ok(collection.into_iter().map(|Capsule { name }| HandleRepository { 
-            owner: owner.clone(), name: name.into()
+            owner: owner.clone(), name: name.to_lowercase()
         }).collect())
     }
 

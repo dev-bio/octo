@@ -88,10 +88,10 @@ impl Account {
 
         match account {
             User::Organization { .. } => Ok(Account::Organization({
-                HandleOrganization { client: client.clone(), name: name.to_owned() }
+                HandleOrganization { client: client.clone(), name: name.to_lowercase() }
             })),
             User::User { .. } => Ok(Account::User({
-                HandleUser { client: client.clone(), name: name.to_owned() }
+                HandleUser { client: client.clone(), name: name.to_lowercase() }
             })),
             _ => Err(AccountError::Unsupported { account }),
         }
